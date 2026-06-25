@@ -50,7 +50,7 @@ SEED_CENTERS = [
         "lat": 10.4955,
         "lng": -66.8474,
         "source_name": "@convzlacomando",
-        "source_url": "https://x.com/convzlacomando",
+        "source_url": "https://www.instagram.com/p/DZ_kBlyIVRI/",
         "accepted_items": "Agua, alimentos no perecederos, insumos médicos, ropa y abrigos",
     },
     {
@@ -60,7 +60,7 @@ SEED_CENTERS = [
         "lat": 10.2469,
         "lng": -67.5958,
         "source_name": "@convzlacomando",
-        "source_url": "https://x.com/convzlacomando",
+        "source_url": "https://www.instagram.com/p/DZ_kBlyIVRI/",
         "accepted_items": "Agua, alimentos no perecederos, insumos médicos, ropa y abrigos",
     },
     {
@@ -70,7 +70,7 @@ SEED_CENTERS = [
         "lat": 10.1820,
         "lng": -67.9800,
         "source_name": "@convzlacomando",
-        "source_url": "https://x.com/convzlacomando",
+        "source_url": "https://www.instagram.com/p/DZ_kBlyIVRI/",
         "accepted_items": "Agua, alimentos no perecederos, insumos médicos, ropa y abrigos",
     },
 ]
