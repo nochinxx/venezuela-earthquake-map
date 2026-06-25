@@ -161,6 +161,17 @@ const EMERGENCY_DIR = [
       { name: "Brigada Ministerio Transporte Terrestre", location: "", phone: "02125372677" },
     ],
   },
+  {
+    category: "🌍 Cruz Roja — Búsqueda de familiares (exterior)",
+    entries: [
+      { name: "Cruz Roja Argentina", location: "Argentina", phone: "cruzroja.org.ar/rcf/" },
+      { name: "Cruz Roja Costarricense", location: "Costa Rica", phone: "+506 6060-8623 · rcf@cruzroja.or.cr · 7:30am–5:00pm" },
+      { name: "Cruz Roja Colombiana", location: "Colombia", phone: "(+57) 321 213 9525 · rcf@cruzrojacolombiana.org" },
+      { name: "Cruz Roja Ecuatoriana", location: "Ecuador", phone: "+098 595 6683 · busquedadefamiliares@cruzroja.org.ec · 8:30am–5:00pm" },
+      { name: "Cruz Roja Hondureña", location: "Honduras", phone: "+504 9849-5556 · busquedarcf@cruzroja.org.hn · 8:00am–4:00pm" },
+      { name: "Cruz Roja Mexicana", location: "México", phone: "56-45-85-32-74" },
+    ],
+  },
 ];
 
 const WALKTHROUGH_STEPS = [
