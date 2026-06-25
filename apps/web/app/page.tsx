@@ -320,7 +320,10 @@ export default function Home() {
   const [externalMissingTotal, setExternalMissingTotal] = useState<number | null>(null);
   const [externalMissingLoading, setExternalMissingLoading] = useState(false);
   const [selectedExternalPerson, setSelectedExternalPerson] = useState<Record<string, unknown> | null>(null);
-  const [panelTab, setPanelTab] = useState<"reports" | "personas" | null>(null);
+  const [panelTab, setPanelTab] = useState<"reports" | "personas" | "edificios" | null>(null);
+  const [buildingSearch, setBuildingSearch] = useState("");
+  const [buildingList, setBuildingList] = useState<Record<string, unknown>[]>([]);
+  const buildingFeaturesRef = useRef<GeoJSON.Feature[]>([]);
   const [missingPanelList, setMissingPanelList] = useState<MissingPerson[]>([]);
   const [missingPanelTotal, setMissingPanelTotal] = useState(0);
   const [missingPanelOffset, setMissingPanelOffset] = useState(0);
@@ -404,6 +407,8 @@ export default function Home() {
     fetch(`${API}/building-damage`).then((r) => r.json()).then((geojson) => {
       if (!geojson?.features) return;
       setBuildingCount(geojson.features.length);
+      buildingFeaturesRef.current = geojson.features;
+      setBuildingList(geojson.features.map((f: GeoJSON.Feature) => ({ ...f.properties, _coords: (f.geometry as GeoJSON.Point).coordinates })));
       const m = map.current;
       if (!m) return;
       const SRC = "building-damage";
@@ -685,6 +690,21 @@ export default function Home() {
     }
   }, [showBuildings]);
 
+  // Building search — filter map source to matching features
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !m.getSource("building-damage")) return;
+    const q = buildingSearch.toLowerCase().trim();
+    const filtered = q
+      ? buildingFeaturesRef.current.filter(f => {
+          const place = String((f.properties as Record<string, unknown>)?.place ?? "").toLowerCase();
+          const needs = String((f.properties as Record<string, unknown>)?.needs ?? "").toLowerCase();
+          return place.includes(q) || needs.includes(q);
+        })
+      : buildingFeaturesRef.current;
+    (m.getSource("building-damage") as mapboxgl.GeoJSONSource).setData({ type: "FeatureCollection", features: filtered });
+  }, [buildingSearch]);
+
   // Missing persons panel loader — resets list when filters/search change
   useEffect(() => {
     if (panelTab !== "personas") return;
@@ -921,6 +941,10 @@ export default function Home() {
                 className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 ${panelTab === "personas" ? "text-violet-400 border-violet-500" : "text-gray-500 border-transparent hover:text-gray-300"}`}>
                 🧍 Personas{missingPanelTotal > 0 ? ` (${missingPanelTotal.toLocaleString()})` : ""}
               </button>
+              <button onClick={() => setPanelTab("edificios")}
+                className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 ${panelTab === "edificios" ? "text-amber-400 border-amber-500" : "text-gray-500 border-transparent hover:text-gray-300"}`}>
+                🏚 Edificios{buildingCount != null ? ` (${buildingCount})` : ""}
+              </button>
               <button onClick={() => { setPanelTab(null); setSelected([]); setSelectedLocation(null); setSelectedExternalPerson(null); }}
                 className="px-3 text-gray-500 hover:text-white text-lg leading-none shrink-0">×</button>
             </div>
@@ -1109,6 +1133,58 @@ export default function Home() {
                 </div>
               </div>
             )}
+
+            {/* Edificios tab */}
+            {panelTab === "edificios" && (
+              <div className="flex flex-col flex-1 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-800 shrink-0">
+                  <input
+                    value={buildingSearch}
+                    onChange={e => setBuildingSearch(e.target.value)}
+                    placeholder="Buscar edificio o dirección..."
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
+                  />
+                  {buildingSearch && (
+                    <p className="text-gray-500 text-xs mt-1.5">
+                      {buildingList.filter(b => {
+                        const q = buildingSearch.toLowerCase();
+                        return String(b.place ?? "").toLowerCase().includes(q) || String(b.needs ?? "").toLowerCase().includes(q);
+                      }).length} resultado(s)
+                    </p>
+                  )}
+                </div>
+                <div className="flex-1 overflow-y-auto divide-y divide-gray-800">
+                  {buildingList
+                    .filter(b => {
+                      if (!buildingSearch.trim()) return true;
+                      const q = buildingSearch.toLowerCase();
+                      return String(b.place ?? "").toLowerCase().includes(q) || String(b.needs ?? "").toLowerCase().includes(q);
+                    })
+                    .map((b, i) => {
+                      const DAMAGE_LABEL: Record<string, string> = { total: "🔴 Total", severo: "🟠 Severo", parcial: "🟡 Parcial" };
+                      const coords = b._coords as [number, number] | undefined;
+                      return (
+                        <div key={i} className="px-4 py-3 hover:bg-gray-800/50 cursor-pointer"
+                          onClick={() => {
+                            if (coords) { map.current?.flyTo({ center: coords, zoom: 16, duration: 800 }); setPanelTab(null); }
+                          }}>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-white text-sm font-medium leading-snug">{String(b.place ?? "Edificio afectado")}</p>
+                            {b.damage_type != null && <span className="text-xs shrink-0">{DAMAGE_LABEL[String(b.damage_type)] ?? String(b.damage_type)}</span>}
+                          </div>
+                          {b.needs != null && <p className="text-gray-400 text-xs mt-0.5 line-clamp-2">{String(b.needs)}</p>}
+                          {coords && <p className="text-amber-500 text-xs mt-0.5">ver en mapa →</p>}
+                        </div>
+                      );
+                    })}
+                </div>
+                <div className="p-3 border-t border-gray-800 shrink-0">
+                  <p className="text-gray-600 text-xs text-center">
+                    <a href="https://terremotovenezuela.com" className="text-amber-500 hover:text-amber-300" target="_blank" rel="noopener noreferrer">terremotovenezuela.com</a>
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Mobile: bottom sheet */}
@@ -1122,6 +1198,10 @@ export default function Home() {
               <button onClick={() => setPanelTab("personas")}
                 className={`flex-1 py-2.5 text-xs font-semibold border-b-2 ${panelTab === "personas" ? "text-violet-400 border-violet-500" : "text-gray-500 border-transparent"}`}>
                 🧍 Personas{missingPanelTotal > 0 ? ` (${missingPanelTotal.toLocaleString()})` : ""}
+              </button>
+              <button onClick={() => setPanelTab("edificios")}
+                className={`flex-1 py-2.5 text-xs font-semibold border-b-2 ${panelTab === "edificios" ? "text-amber-400 border-amber-500" : "text-gray-500 border-transparent"}`}>
+                🏚 Edificios
               </button>
               <button onClick={() => { setPanelTab(null); setSelected([]); setSelectedLocation(null); setSelectedExternalPerson(null); }}
                 className="px-3 text-gray-500 text-lg leading-none shrink-0">×</button>
@@ -1250,6 +1330,42 @@ export default function Home() {
                       </button>
                     </div>
                   )}
+                </div>
+              </>
+            )}
+
+            {/* Edificios tab – mobile */}
+            {panelTab === "edificios" && (
+              <>
+                <div className="px-3 py-2 border-b border-gray-800 shrink-0">
+                  <input
+                    value={buildingSearch}
+                    onChange={e => setBuildingSearch(e.target.value)}
+                    placeholder="Buscar edificio o dirección..."
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
+                  {buildingList
+                    .filter(b => {
+                      if (!buildingSearch.trim()) return true;
+                      const q = buildingSearch.toLowerCase();
+                      return String(b.place ?? "").toLowerCase().includes(q) || String(b.needs ?? "").toLowerCase().includes(q);
+                    })
+                    .map((b, i) => {
+                      const DAMAGE_LABEL: Record<string, string> = { total: "🔴 Total", severo: "🟠 Severo", parcial: "🟡 Parcial" };
+                      const coords = b._coords as [number, number] | undefined;
+                      return (
+                        <div key={i} className="px-3 py-2.5 hover:bg-gray-800/50 cursor-pointer"
+                          onClick={() => { if (coords) { map.current?.flyTo({ center: coords, zoom: 16, duration: 800 }); setPanelTab(null); } }}>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-white text-sm font-medium leading-snug">{String(b.place ?? "Edificio afectado")}</p>
+                            {b.damage_type != null && <span className="text-xs shrink-0">{DAMAGE_LABEL[String(b.damage_type)] ?? String(b.damage_type)}</span>}
+                          </div>
+                          {b.needs != null && <p className="text-gray-400 text-xs mt-0.5 line-clamp-2">{String(b.needs)}</p>}
+                        </div>
+                      );
+                    })}
                 </div>
               </>
             )}
