@@ -628,10 +628,11 @@ export default function Home() {
         >
           <span className="text-amber-400 text-xs font-bold shrink-0">⚠️ USGS</span>
           <span className="text-gray-300 text-xs truncate">
-            <span className="text-white font-bold">{casualties?.deaths ?? 0}</span>
+            <span className="text-white font-bold">{casualties?.deaths ?? "—"}</span>
             <span className="text-red-400"> confirmados</span>
+            <span className="text-red-600 text-xs ml-1">(parcial)</span>
             <span className="text-gray-500 mx-1">·</span>
-            <span className="text-amber-300">10K–100K estimados</span>
+            <span className="text-amber-300">10K–100K est. USGS</span>
           </span>
           <span className="ml-auto text-gray-600 text-xs shrink-0">{bannerOpen ? "▲" : "▼"}</span>
         </div>
@@ -650,9 +651,10 @@ export default function Home() {
             </div>
             <div className="bg-red-950 border-b border-red-800 px-4 py-2 flex items-center gap-3 flex-wrap">
               <span className="text-red-300 font-bold text-xs uppercase tracking-wide">Confirmados</span>
-              <span className="text-white font-bold text-sm">{casualties?.deaths ?? 0} <span className="text-red-300 font-normal text-xs">muertos</span></span>
-              {casualties?.injured != null && <span className="text-white font-bold text-sm">{casualties.injured} <span className="text-red-300 font-normal text-xs">heridos</span></span>}
+              <span className="text-white font-bold text-sm">{casualties?.deaths ?? "—"} <span className="text-red-300 font-normal text-xs">muertos</span></span>
+              {casualties?.injured != null && <span className="text-white font-bold text-sm">{casualties.injured}+ <span className="text-red-300 font-normal text-xs">heridos</span></span>}
               {casualties?.missing != null && <span className="text-white font-bold text-sm">{casualties.missing} <span className="text-red-300 font-normal text-xs">desaparecidos</span></span>}
+              <span className="text-red-400 text-xs hidden sm:inline italic">⚠ Cifra parcial · excluye La Guaira</span>
               <span className="text-red-500 text-xs ml-auto italic hidden sm:inline">
                 {casualties?.source_url ? (
                   <a href={casualties.source_url} target="_blank" rel="noopener noreferrer" className="hover:text-red-300 underline">
