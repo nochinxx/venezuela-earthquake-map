@@ -6,7 +6,8 @@ import "mapbox-gl/dist/mapbox-gl.css";
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN!;
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Empty NEXT_PUBLIC_API_URL = use Next.js API routes (deployed on Vercel, no separate server)
+const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 interface Report {
   id: string;
@@ -33,18 +34,32 @@ const DAMAGE_LABEL: Record<number, string> = {
   1: "Menor", 2: "Leve", 3: "Moderado", 4: "Severo", 5: "Colapso",
 };
 
+type SortOrder = "newest" | "oldest";
+type SourceFilter = "" | "twitter" | "instagram" | "youtube";
+
 export default function Home() {
   const mapRef = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [selected, setSelected] = useState<Report[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [stats, setStats] = useState<{ total: number; by_source: Record<string, number> } | null>(null);
-  const [source, setSource] = useState<string>("");
+  const [source, setSource] = useState<SourceFilter>("");
+  const [sort, setSort] = useState<SortOrder>("newest");
+  const [panelSort, setPanelSort] = useState<SortOrder>("newest");
+
+  function sortReports(rows: Report[], order: SortOrder) {
+    return [...rows].sort((a, b) => {
+      const ta = a.post_time ? new Date(a.post_time).getTime() : 0;
+      const tb = b.post_time ? new Date(b.post_time).getTime() : 0;
+      return order === "newest" ? tb - ta : ta - tb;
+    });
+  }
 
   function loadData() {
-    const params = source ? `?source=${source}` : "";
+    const p = new URLSearchParams();
+    if (source) p.set("source", source);
     Promise.all([
-      fetch(`${API}/reports/geojson${params}`).then((r) => r.json()),
+      fetch(`${API}/reports/geojson?${p}`).then((r) => r.json()),
       fetch(`${API}/reports/stats`).then((r) => r.json()),
     ]).then(([geojson, statsData]) => {
       setStats(statsData);
@@ -174,29 +189,44 @@ export default function Home() {
     if (map.current?.loaded()) loadData();
   }, [source]);
 
+  const sortedSelected = sortReports(selected, panelSort);
+
   return (
     <div className="h-screen w-screen flex flex-col bg-gray-950 text-white">
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 shrink-0">
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 shrink-0 flex-wrap gap-2">
         <div>
           <h1 className="font-bold text-red-400 text-lg leading-tight">🇻🇪 Venezuela Earthquake Map</h1>
           <p className="text-gray-400 text-xs">Reportes en tiempo real — daños y zonas afectadas</p>
         </div>
-        <div className="flex items-center gap-3 text-sm">
+        <div className="flex items-center gap-2 flex-wrap">
           {stats && (
-            <span className="text-gray-300">
+            <span className="text-gray-400 text-xs">
               <span className="font-bold text-white">{stats.total}</span> reportes
+              {stats.by_source && Object.entries(stats.by_source).map(([s, n]) => (
+                <span key={s} className="ml-2 text-gray-500">{s}: {n}</span>
+              ))}
             </span>
           )}
-          <select
-            className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm"
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-          >
-            <option value="">Todas las fuentes</option>
-            <option value="twitter">Twitter / X</option>
-            <option value="instagram">Instagram</option>
-            <option value="youtube">YouTube</option>
-          </select>
+
+          {/* Source filter pills */}
+          <div className="flex gap-1">
+            {(["", "youtube", "twitter", "instagram"] as SourceFilter[]).map((s) => (
+              <button key={s} onClick={() => setSource(s)}
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                  source === s
+                    ? "bg-red-600 text-white"
+                    : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                }`}>
+                {s === "" ? "Todas" : s === "twitter" ? "X / Twitter" : s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {/* Sort toggle */}
+          <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
+            className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 hover:bg-gray-700">
+            {sort === "newest" ? "↓ Más recientes" : "↑ Más antiguos"}
+          </button>
         </div>
       </div>
 
@@ -205,19 +235,31 @@ export default function Home() {
 
         {selected.length > 0 && (
           <div className="absolute right-0 top-0 h-full w-96 bg-gray-900/95 border-l border-gray-800 overflow-y-auto z-10">
-            <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-4 py-3 flex justify-between items-center">
-              <div>
-                <p className="font-semibold text-white text-sm">
-                  📍 {selectedLocation ?? "Zona afectada"}
-                </p>
-                <p className="text-gray-400 text-xs">{selected.length} reporte{selected.length !== 1 ? "s" : ""}</p>
+            <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-4 py-3">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-semibold text-white text-sm">
+                    📍 {selectedLocation ?? "Zona afectada"}
+                  </p>
+                  <p className="text-gray-400 text-xs">{selected.length} reporte{selected.length !== 1 ? "s" : ""}</p>
+                </div>
+                <button onClick={() => { setSelected([]); setSelectedLocation(null); }}
+                  className="text-gray-500 hover:text-white text-xl leading-none">×</button>
               </div>
-              <button onClick={() => { setSelected([]); setSelectedLocation(null); }}
-                className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+              <div className="flex gap-1 mt-2">
+                <button onClick={() => setPanelSort("newest")}
+                  className={`px-2 py-0.5 rounded text-xs ${panelSort === "newest" ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400"}`}>
+                  ↓ Más recientes
+                </button>
+                <button onClick={() => setPanelSort("oldest")}
+                  className={`px-2 py-0.5 rounded text-xs ${panelSort === "oldest" ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400"}`}>
+                  ↑ Más antiguos
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-col divide-y divide-gray-800">
-              {selected.map((r) => (
+              {sortedSelected.map((r) => (
                 <div key={r.id} className="p-4 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${
