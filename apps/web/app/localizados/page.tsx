@@ -29,7 +29,6 @@ function tweetLabel(url: string | null | undefined): string {
 
 function sourceTitle(src: string | null | undefined): string {
   if (!src) return "Cruce de datos";
-  // Strip confidence prefix: "SismoVenezuela:high via X" → "X", "SismoVenezuela via X" → "X"
   const stripped = src.replace(/^SismoVenezuela(?::[a-z]+)? via /i, "").replace("SismoVenezuela — cruce con lista de pacientes del ", "").trim();
   if (stripped.includes("Domingo Luciani")) return "Lista de pacientes — Hospital Domingo Luciani";
   if (stripped.includes("Vargas")) return "Lista de pacientes — Hospital Dr. José María Vargas";
@@ -48,6 +47,7 @@ function sourceBadge(src: string | null | undefined): string {
 
 function matchCircle(src: string | null | undefined, inDb: boolean): { circle: string; label: string } {
   if (!inDb) return { circle: "⚫️", label: "Nueva entrada desde lista hospitalaria" };
+  if (src?.includes(":cedula")) return { circle: "🟢", label: "Cédula verificada" };
   if (src?.includes(":high")) return { circle: "🟡", label: "Alta confianza — nombre ≥85%" };
   if (src?.includes(":medium")) return { circle: "🟠", label: "Confianza media — nombre 72–84%" };
   return { circle: "🟡", label: "Alta confianza (cruce anterior)" };
@@ -66,15 +66,15 @@ export default function LocalizadosPage() {
   const [copied, setCopied] = useState(false);
   const [showMethod, setShowMethod] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedList, setExpandedList] = useState<string | null>(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitForm, setSubmitForm] = useState({ submitter: "", hospital: "", tweetUrl: "", names: "" });
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitDone, setSubmitDone] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const [showStats, setShowStats] = useState(false);
   const [sinContactoTotal, setSinContactoTotal] = useState<number | null>(null);
 
-  // Load matched (our cross-references) on mount
+  // Load matched cross-references + background counts on mount
   useEffect(() => {
     fetch(`/api/missing-persons?matched=1&limit=500`)
       .then(r => r.json())
@@ -84,9 +84,19 @@ export default function LocalizadosPage() {
         setLoadingMatched(false);
       })
       .catch(() => setLoadingMatched(false));
+
+    fetch("/api/missing-persons?count=1&status=sin-contacto")
+      .then(r => r.json())
+      .then((res: { total: number }) => setSinContactoTotal(res.total ?? null))
+      .catch(() => {});
+
+    fetch("/api/missing-persons?count=1&status=encontrado")
+      .then(r => r.json())
+      .then((res: { total: number }) => setAllTotal(res.total ?? null))
+      .catch(() => {});
   }, []);
 
-  // Load all localizados lazily when tab switches (also needed for "listas")
+  // Load all localizados lazily when tab switches
   useEffect(() => {
     if ((tab !== "all" && tab !== "listas") || all.length > 0) return;
     setLoadingAll(true);
@@ -113,20 +123,33 @@ export default function LocalizadosPage() {
   }
 
   const allHasMore = allTotal != null && all.length < allTotal;
-
   const people = tab === "matched" ? matched : all;
-  const loading = tab === "matched" ? loadingMatched : loadingAll || (tab === "listas" && loadingAll);
+  const loading = tab === "matched" ? loadingMatched : loadingAll;
 
-  // For matched tab: only confirmed DB matches (had a prior missing report)
   const confirmedMatched = useMemo(() => matched.filter(p => p.source_id), [matched]);
 
-  // Stats
-  const statsHigh = useMemo(() => confirmedMatched.filter(p => p.external_source?.includes(":high")).length, [confirmedMatched]);
-  const statsMedium = useMemo(() => confirmedMatched.filter(p => p.external_source?.includes(":medium")).length, [confirmedMatched]);
-  const statsLegacyHigh = useMemo(() => confirmedMatched.filter(p => !p.external_source?.includes(":high") && !p.external_source?.includes(":medium")).length, [confirmedMatched]);
-  const statsNewInserts = useMemo(() => all.filter(p => (p.external_source ?? "").includes("SismoVenezuela") && !p.source_id).length, [all]);
+  // Group ALL matched records (confirmed + new inserts) by source tweet for inline stats
+  const groupedAllMatched = useMemo(() => {
+    const map = new Map<string, { label: string; title: string; tweetUrl: string | null; total: number; confirmed: number }>();
+    for (const p of matched) {
+      const key = p.source2_url ?? "manual";
+      if (!map.has(key)) {
+        map.set(key, {
+          label: tweetLabel(p.source2_url),
+          title: sourceTitle(p.external_source),
+          tweetUrl: p.source2_url ?? null,
+          total: 0,
+          confirmed: 0,
+        });
+      }
+      const g = map.get(key)!;
+      g.total++;
+      if (p.source_id) g.confirmed++;
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [matched]);
 
-  // Group by source tweet
+  // Group confirmed matches by source tweet for matched tab display
   const groupedMatched = useMemo(() => {
     const map = new Map<string, { label: string; title: string; tweetUrl: string | null; people: Person[] }>();
     for (const p of confirmedMatched) {
@@ -158,8 +181,6 @@ export default function LocalizadosPage() {
     return all.filter(p => p.name.toLowerCase().includes(ql) || (p.last_seen_location ?? "").toLowerCase().includes(ql));
   }, [all, ql]);
 
-  // Listas tab: group all localizados by their source tweet (hospital list)
-  // Only tweet URLs (x.com/twitter.com) — exclude platform homepages like venezuelatebusca.com
   const groupedByList = useMemo(() => {
     const map = new Map<string, { label: string; title: string; tweetUrl: string; people: Person[] }>();
     for (const p of all) {
@@ -243,31 +264,16 @@ export default function LocalizadosPage() {
             ← Mapa
           </Link>
           <span className="text-white font-semibold text-sm truncate">Personas localizadas</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => {
-        setShowStats(true);
-        if (sinContactoTotal === null) {
-          fetch("/api/missing-persons?count=1&status=sin-contacto")
-            .then(r => r.json())
-            .then((res: { total: number }) => setSinContactoTotal(res.total ?? null))
-            .catch(() => {});
-        }
-      }}
-              className="px-2.5 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold transition-colors">
-              📊
-            </button>
-            <button onClick={copyAll}
-              className="px-3 py-1.5 rounded bg-cyan-800 hover:bg-cyan-700 text-cyan-100 text-xs font-semibold transition-colors">
-              {copied ? "✓ Copiado" : "Copiar lista"}
-            </button>
-          </div>
+          <button onClick={copyAll}
+            className="px-3 py-1.5 rounded bg-cyan-800 hover:bg-cyan-700 text-cyan-100 text-xs font-semibold transition-colors shrink-0">
+            {copied ? "✓ Copiado" : "Copiar lista"}
+          </button>
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-5 flex flex-col gap-5">
 
-        {/* Tabs + count */}
+        {/* Tabs */}
         <div className="flex flex-col gap-3">
           <div className="flex gap-1 p-1 bg-gray-900 rounded-lg border border-gray-800">
             <button
@@ -307,15 +313,12 @@ export default function LocalizadosPage() {
                 {" y "}
                 <a href="https://venezulatebusca.com" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline">venezulatebusca.com</a>.
               </p>
-
-              {/* Methodology toggle */}
               <button
                 onClick={() => setShowMethod(v => !v)}
                 className="flex items-center gap-1.5 text-gray-500 hover:text-gray-300 text-[11px] transition-colors w-fit">
                 <span className={`transition-transform ${showMethod ? "rotate-90" : ""}`}>▶</span>
                 {showMethod ? "Ocultar metodología" : "¿Cómo funciona el cruce? · Margen de error"}
               </button>
-
               {showMethod && (
                 <div className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 flex flex-col gap-2.5 text-xs">
                   <div>
@@ -329,19 +332,19 @@ export default function LocalizadosPage() {
                     <div className="flex flex-col gap-1.5">
                       <div className="flex items-start gap-2">
                         <span className="text-base leading-none shrink-0">🟢</span>
-                        <span className="text-gray-400"><strong className="text-gray-300">Cédula verificada</strong> — número de cédula coincide exactamente. Máxima confianza <em>(próximamente)</em></span>
+                        <span className="text-gray-400"><strong className="text-gray-300">Cédula verificada</strong> — número de cédula coincide exactamente. Máxima confianza</span>
                       </div>
                       <div className="flex items-start gap-2">
                         <span className="text-base leading-none shrink-0">🟡</span>
-                        <span className="text-gray-400"><strong className="text-gray-300">Alta confianza (≥ 85 %)</strong> — nombre prácticamente idéntico o variación ortográfica menor. Ej: "Anderson Mendoza" ↔ "Anderson Mendoza" (100 %)</span>
+                        <span className="text-gray-400"><strong className="text-gray-300">Alta confianza (≥ 85 %)</strong> — nombre prácticamente idéntico o variación ortográfica menor</span>
                       </div>
                       <div className="flex items-start gap-2">
                         <span className="text-base leading-none shrink-0">🟠</span>
-                        <span className="text-gray-400"><strong className="text-gray-300">Confianza media (72 – 84 %)</strong> — posible variación de apellido, nombre abreviado o error tipográfico. Requiere verificación manual</span>
+                        <span className="text-gray-400"><strong className="text-gray-300">Confianza media (72 – 84 %)</strong> — posible variación de apellido o error tipográfico. Requiere verificación manual</span>
                       </div>
                       <div className="flex items-start gap-2">
                         <span className="text-base leading-none shrink-0">⚫️</span>
-                        <span className="text-gray-400"><strong className="text-gray-300">Sin cruce previo</strong> — persona aparece en lista hospitalaria pero no estaba en la base de desaparecidos</span>
+                        <span className="text-gray-400"><strong className="text-gray-300">Sin cruce previo</strong> — aparece en lista hospitalaria pero no estaba en la base de desaparecidos</span>
                       </div>
                     </div>
                   </div>
@@ -354,19 +357,18 @@ export default function LocalizadosPage() {
                     </ul>
                   </div>
                   <p className="text-gray-600 text-[10px] border-t border-gray-800 pt-2">
-                    ⚠️ Todos los cruces son aproximados. <strong className="text-gray-500">Verificar siempre con la fuente original</strong> (ver enlace al tweet) antes de confirmar y actualizar registros.
+                    ⚠️ Todos los cruces son aproximados. <strong className="text-gray-500">Verificar siempre con la fuente original</strong> antes de confirmar.
                   </p>
                 </div>
               )}
-
               <p className="text-gray-600 text-[10px]">⚠️ Los cruces son aproximados — siempre verificar con la fuente original antes de confirmar.</p>
             </div>
           ) : tab === "listas" ? (
             <div className="flex flex-col gap-2">
               <p className="text-gray-400 text-xs leading-relaxed">
                 Listas completas de pacientes publicadas en hospitales, tal como fueron difundidas.{" "}
-                <strong className="text-amber-400">Incluye a todas las personas de cada lista</strong>, estuvieran o no en la base de desaparecidos. Las que muestran{" "}
-                <span className="text-sm">🟡</span> o <span className="text-sm">🟠</span> fueron cruzadas contra la base de desaparecidos; <span className="text-sm">⚫️</span> indica nueva entrada sin cruce previo.
+                <strong className="text-amber-400">Incluye a todas las personas de cada lista</strong>, estuvieran o no en la base de desaparecidos.
+                Las que muestran <span className="text-sm">🟡</span> o <span className="text-sm">🟠</span> fueron cruzadas; <span className="text-sm">⚫️</span> indica nueva entrada sin cruce previo.
               </p>
               <button
                 onClick={() => setShowSubmitModal(true)}
@@ -376,10 +378,67 @@ export default function LocalizadosPage() {
             </div>
           ) : (
             <p className="text-gray-400 text-xs leading-relaxed">
-              Todos los registros con estado <strong className="text-green-400">localizado / encontrado</strong> en nuestra base de datos, de cualquier fuente — nuestro cruce, actualizaciones de plataformas colaboradoras y reportes directos.
+              Todos los registros con estado <strong className="text-green-400">localizado / encontrado</strong> en nuestra base de datos, de cualquier fuente.
             </p>
           )}
         </div>
+
+        {/* Inline stats — matched tab only */}
+        {tab === "matched" && (
+          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+            <div className="grid grid-cols-2 divide-x divide-y divide-gray-800">
+              <div className="px-4 py-3 flex flex-col gap-0.5">
+                <p className="text-gray-500 text-[10px] uppercase tracking-wide">Desaparecidos</p>
+                <p className="text-white text-2xl font-bold">{sinContactoTotal != null ? sinContactoTotal.toLocaleString("es-VE") : "…"}</p>
+                <p className="text-gray-600 text-[10px]">sin contacto activos</p>
+              </div>
+              <div className="px-4 py-3 flex flex-col gap-0.5">
+                <p className="text-green-400 text-[10px] uppercase tracking-wide">Localizados</p>
+                <p className="text-white text-2xl font-bold">{allTotal != null ? allTotal.toLocaleString("es-VE") : "…"}</p>
+                {sinContactoTotal != null && allTotal != null && (
+                  <p className="text-green-700 text-[10px]">{((allTotal / (allTotal + sinContactoTotal)) * 100).toFixed(1)}% del total reportado</p>
+                )}
+              </div>
+              <div className="px-4 py-3 flex flex-col gap-0.5">
+                <p className="text-cyan-400 text-[10px] uppercase tracking-wide">Cruces confirmados</p>
+                <p className="text-white text-2xl font-bold">{confirmedMatched.length}</p>
+                <p className="text-gray-600 text-[10px]">tenían reporte previo en la base</p>
+              </div>
+              <div className="px-4 py-3 flex flex-col gap-0.5">
+                <p className="text-amber-400 text-[10px] uppercase tracking-wide">Nuevas entradas</p>
+                <p className="text-white text-2xl font-bold">{matchedTotal != null ? (matchedTotal - confirmedMatched.length).toLocaleString("es-VE") : "…"}</p>
+                <p className="text-gray-600 text-[10px]">en hospital, sin reporte previo</p>
+              </div>
+            </div>
+            {groupedAllMatched.length > 0 && (
+              <div className="border-t border-gray-800 px-4 py-3 flex flex-col gap-2">
+                <p className="text-gray-500 text-[10px] uppercase tracking-wide font-semibold">
+                  {groupedAllMatched.length} lista{groupedAllMatched.length !== 1 ? "s" : ""} procesadas · {groupedAllMatched.reduce((s, g) => s + g.total, 0)} personas
+                </p>
+                <div className="flex flex-col divide-y divide-gray-800/60">
+                  {groupedAllMatched.map((g, i) => {
+                    const hitRate = g.total > 0 ? Math.round((g.confirmed / g.total) * 100) : 0;
+                    return (
+                      <div key={i} className="flex items-center justify-between gap-3 py-2">
+                        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                          <p className="text-gray-300 text-xs font-medium leading-tight truncate">{g.title}</p>
+                          {g.tweetUrl && (
+                            <a href={g.tweetUrl} target="_blank" rel="noopener noreferrer"
+                              className="text-gray-600 text-[10px] hover:text-amber-500 hover:underline">{g.label} ↗</a>
+                          )}
+                        </div>
+                        <div className="shrink-0 text-right flex flex-col gap-0.5">
+                          <p className="text-white text-xs font-bold">{g.total} personas</p>
+                          <p className="text-cyan-600 text-[10px]">{g.confirmed} cruces 🟡 ({hitRate}%)</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Search */}
         <input
@@ -412,9 +471,6 @@ export default function LocalizadosPage() {
                 <div className="flex flex-col gap-2">
                   {group.people.map((p, pi) => {
                     const isExpanded = expandedId === p.id;
-                    const src = p.external_source ?? "";
-                    const confidence: "high" | "medium" | null =
-                      src.includes(":high") ? "high" : src.includes(":medium") ? "medium" : null;
                     const { circle: mc, label: mcLabel } = matchCircle(p.external_source, true);
                     const isVzb = p.source_id?.startsWith("vzb_");
                     const platformLabel = isVzb ? "venezulatebusca.com" : "desaparecidosterremotovenezuela.com";
@@ -425,7 +481,6 @@ export default function LocalizadosPage() {
                         : "https://desaparecidosterremotovenezuela.com";
                     return (
                       <div key={pi} className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-                        {/* Collapsed row */}
                         <button
                           className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-800/40 transition-colors"
                           onClick={() => setExpandedId(isExpanded ? null : p.id)}>
@@ -446,8 +501,6 @@ export default function LocalizadosPage() {
                             <span className="text-gray-600 text-xs">{isExpanded ? "▲" : "▼"}</span>
                           </div>
                         </button>
-
-                        {/* Expanded — full card from our DB */}
                         {isExpanded && (
                           <div className="border-t border-gray-800 px-4 py-3 flex flex-col gap-3">
                             {p.photo_url && (
@@ -488,7 +541,7 @@ export default function LocalizadosPage() {
           </>
         )}
 
-        {/* Listas tab — full hospital rosters grouped by source tweet */}
+        {/* Listas tab — full hospital rosters */}
         {!loading && tab === "listas" && (
           <>
             {filteredLists.length === 0 && <div className="text-center text-gray-600 py-12 text-sm">Sin listas cargadas</div>}
@@ -497,40 +550,58 @@ export default function LocalizadosPage() {
                 {filteredLists.length} lista{filteredLists.length !== 1 ? "s" : ""} · {filteredLists.reduce((s, g) => s + g.people.length, 0)} personas
               </p>
             )}
-            {filteredLists.map((group, gi) => (
-              <div key={gi} className="flex flex-col gap-2">
-                <div className="sticky top-[52px] z-[5] bg-gray-950 pt-1 pb-2 border-b border-amber-900/50 flex items-start justify-between gap-3">
-                  <div className="flex flex-col gap-0.5">
-                    <p className="text-white font-semibold text-sm">{group.title}</p>
-                    <a href={group.tweetUrl} target="_blank" rel="noopener noreferrer"
-                      className="text-amber-500 text-xs hover:underline">
-                      {group.label} — ver publicación original ↗
-                    </a>
-                  </div>
-                  <span className="text-gray-500 text-xs shrink-0">{group.people.length} personas</span>
+            {filteredLists.map((group, gi) => {
+              const isOpen = expandedList === group.tweetUrl;
+              const matched_count = group.people.filter(p => !!p.source_id).length;
+              return (
+                <div key={gi} className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+                  {/* Accordion header */}
+                  <button
+                    className="w-full px-4 py-3 flex items-start gap-3 text-left hover:bg-gray-800/40 transition-colors"
+                    onClick={() => setExpandedList(isOpen ? null : group.tweetUrl)}>
+                    <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                      <p className="text-white font-semibold text-sm leading-tight">{group.title}</p>
+                      <a
+                        href={group.tweetUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-amber-500 text-xs hover:underline w-fit"
+                        onClick={e => e.stopPropagation()}>
+                        {group.label} ↗
+                      </a>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className="text-white text-xs font-bold">{group.people.length} personas</span>
+                      <span className="text-cyan-600 text-[10px]">{matched_count} cruces 🟡</span>
+                      <span className="text-gray-500 text-xs">{isOpen ? "▲" : "▼"}</span>
+                    </div>
+                  </button>
+                  {/* Accordion body */}
+                  {isOpen && (
+                    <div className="border-t border-gray-800 divide-y divide-gray-800">
+                      {group.people.map((p, pi) => {
+                        const wasInDb = !!p.source_id;
+                        const { circle: lc, label: lcLabel } = matchCircle(p.external_source, wasInDb);
+                        return (
+                          <div key={pi} className="px-4 py-2.5 flex items-center gap-3">
+                            <span className="text-gray-600 text-xs w-5 shrink-0">{pi + 1}.</span>
+                            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                              <p className="text-white text-sm font-medium">{p.name}</p>
+                              {(p.age || p.last_seen_location) && (
+                                <p className="text-gray-500 text-xs">
+                                  {p.age ? `${p.age} años` : ""}{p.age && p.last_seen_location ? " · " : ""}{p.last_seen_location ?? ""}
+                                </p>
+                              )}
+                            </div>
+                            <span title={lcLabel} className="text-[11px] shrink-0">{lc}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden divide-y divide-gray-800">
-                  {group.people.map((p, pi) => {
-                    const wasInDb = !!p.source_id;
-                    const { circle: lc, label: lcLabel } = matchCircle(p.external_source, wasInDb);
-                    return (
-                      <div key={pi} className="px-4 py-2.5 flex items-center gap-3">
-                        <span className="text-gray-600 text-xs w-5 shrink-0">{pi + 1}.</span>
-                        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                          <p className="text-white text-sm font-medium">{p.name}</p>
-                          {(p.age || p.last_seen_location) && (
-                            <p className="text-gray-500 text-xs">
-                              {p.age ? `${p.age} años` : ""}{p.age && p.last_seen_location ? " · " : ""}{p.last_seen_location ?? ""}
-                            </p>
-                          )}
-                        </div>
-                        <span title={lcLabel} className="text-[11px] shrink-0">{lc}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {allHasMore && !ql && (
               <button
                 onClick={loadMore}
@@ -612,146 +683,14 @@ export default function LocalizadosPage() {
               </button>
             </div>
             {tab === "matched" && (
-            <p className="text-gray-600 text-xs text-center">
-              ¿Error en el cruce? →{" "}
-              <a href="https://x.com/mariojllesca" target="_blank" rel="noopener noreferrer" className="hover:text-gray-400">@mariojllesca</a>
-            </p>
+              <p className="text-gray-600 text-xs text-center">
+                ¿Error en el cruce? →{" "}
+                <a href="https://x.com/mariojllesca" target="_blank" rel="noopener noreferrer" className="hover:text-gray-400">@mariojllesca</a>
+              </p>
             )}
           </div>
         )}
       </div>
-
-      {/* Stats modal */}
-      {showStats && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-          onClick={e => { if (e.target === e.currentTarget) setShowStats(false); }}>
-          <div className="w-full max-w-lg bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden max-h-[85vh] flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 shrink-0">
-              <p className="text-white font-semibold text-sm">📊 Estadísticas — Personas localizadas</p>
-              <button onClick={() => setShowStats(false)} className="text-gray-500 hover:text-white text-lg leading-none">×</button>
-            </div>
-
-            <div className="overflow-y-auto px-5 py-4 flex flex-col gap-5">
-
-              {/* Hero numbers */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-cyan-950 border border-cyan-800 rounded-xl p-4 flex flex-col gap-1">
-                  <p className="text-cyan-400 text-[11px] uppercase tracking-wide font-semibold">Desaparecidos en la base</p>
-                  <p className="text-white text-2xl font-bold">{sinContactoTotal != null ? sinContactoTotal.toLocaleString("es-VE") : "…"}</p>
-                  <p className="text-cyan-700 text-[10px]">registros únicos sin contacto</p>
-                </div>
-                <div className="bg-green-950 border border-green-800 rounded-xl p-4 flex flex-col gap-1">
-                  <p className="text-green-400 text-[11px] uppercase tracking-wide font-semibold">Localizados</p>
-                  <p className="text-white text-2xl font-bold">{allTotal != null ? allTotal.toLocaleString("es-VE") : "…"}</p>
-                  {sinContactoTotal != null && allTotal != null && (
-                    <p className="text-green-700 text-[10px]">{((allTotal / (allTotal + sinContactoTotal)) * 100).toFixed(1)}% del total reportado</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Cross-reference section */}
-              <div className="flex flex-col gap-2">
-                <p className="text-gray-400 text-[11px] uppercase tracking-wide font-semibold">Cruces SismoVenezuela</p>
-                <div className="bg-gray-800 rounded-xl divide-y divide-gray-700 overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <div className="flex flex-col gap-0.5">
-                      <p className="text-gray-200 text-sm">Total procesados por el algoritmo</p>
-                      <p className="text-gray-500 text-[10px]">comparados contra la base de desaparecidos</p>
-                    </div>
-                    <span className="text-white font-bold text-lg shrink-0">{matchedTotal != null ? matchedTotal.toLocaleString("es-VE") : "—"}</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span>🟡</span>
-                      <div className="flex flex-col">
-                        <span className="text-gray-300 text-sm">Cruces confirmados (≥85%)</span>
-                        <span className="text-gray-500 text-[10px]">tenían reporte previo en la base</span>
-                      </div>
-                    </div>
-                    <span className="text-white font-bold text-sm shrink-0">{statsHigh + statsLegacyHigh}</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span>🟠</span>
-                      <div className="flex flex-col">
-                        <span className="text-gray-300 text-sm">Confianza media (72–84%)</span>
-                        <span className="text-gray-500 text-[10px]">requieren verificación manual</span>
-                      </div>
-                    </div>
-                    <span className="text-white font-bold text-sm shrink-0">{statsMedium}</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span>⚫️</span>
-                      <div className="flex flex-col">
-                        <span className="text-gray-300 text-sm">Nuevas entradas</span>
-                        <span className="text-gray-500 text-[10px]">en hospital pero sin reporte previo</span>
-                      </div>
-                    </div>
-                    <span className="text-white font-bold text-sm shrink-0">{all.length > 0 ? statsNewInserts.toLocaleString("es-VE") : "—"}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Lists section */}
-              {(groupedByList.length > 0 || all.length === 0) && (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-gray-400 text-[11px] uppercase tracking-wide font-semibold">Listas hospitalarias procesadas</p>
-                    {groupedByList.length > 0 && (
-                      <span className="text-amber-400 text-xs font-bold">{groupedByList.length} listas · {groupedByList.reduce((s, g) => s + g.people.length, 0).toLocaleString("es-VE")} personas</span>
-                    )}
-                  </div>
-                  {groupedByList.length > 0 ? (
-                    <div className="bg-gray-800 rounded-xl divide-y divide-gray-700 overflow-hidden">
-                      {groupedByList.map((g, i) => {
-                        const verified = g.people.filter(p => !!p.source_id).length;
-                        const hitRate = g.people.length > 0 ? Math.round((verified / g.people.length) * 100) : 0;
-                        return (
-                          <div key={i} className="px-4 py-3 flex items-start justify-between gap-3">
-                            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                              <p className="text-gray-200 text-xs font-medium leading-tight">{g.title}</p>
-                              <a href={g.tweetUrl} target="_blank" rel="noopener noreferrer"
-                                className="text-amber-500 text-[10px] hover:underline">{g.label} ↗</a>
-                            </div>
-                            <div className="shrink-0 text-right flex flex-col gap-0.5">
-                              <p className="text-white text-sm font-bold">{g.people.length} personas</p>
-                              <p className="text-cyan-500 text-[10px]">{verified} cruces 🟡 ({hitRate}%)</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-gray-600 text-[10px]">Abre la pestaña "Listas" para cargar el desglose por hospital.</p>
-                  )}
-                </div>
-              )}
-
-              {/* Sources */}
-              <div className="flex flex-col gap-2">
-                <p className="text-gray-400 text-[11px] uppercase tracking-wide font-semibold">Fuentes de la base de desaparecidos</p>
-                <div className="bg-gray-800 rounded-xl divide-y divide-gray-700 overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-2.5">
-                    <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer" className="text-violet-400 text-xs hover:underline">desaparecidosterremotovenezuela.com</a>
-                    <span className="text-gray-400 text-xs">~38,500 registros</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-2.5">
-                    <a href="https://venezulatebusca.com" target="_blank" rel="noopener noreferrer" className="text-violet-400 text-xs hover:underline">venezulatebusca.com</a>
-                    <span className="text-gray-400 text-xs">~6,000 registros</span>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-gray-600 text-[10px] leading-relaxed text-center border-t border-gray-800 pt-3">
-                "Localizado" indica aparición en lista hospitalaria — no confirma estado médico ni de vida. Los cruces son aproximados; siempre verificar con la fuente original.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Submit list modal */}
       {showSubmitModal && (
@@ -759,12 +698,10 @@ export default function LocalizadosPage() {
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4"
           onClick={e => { if (e.target === e.currentTarget) closeSubmitModal(); }}>
           <div className="w-full max-w-lg bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden">
-            {/* Modal header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
               <p className="text-white font-semibold text-sm">Enviar lista de pacientes</p>
               <button onClick={closeSubmitModal} className="text-gray-500 hover:text-white text-lg leading-none">×</button>
             </div>
-
             {submitDone ? (
               <div className="px-5 py-8 flex flex-col items-center gap-3 text-center">
                 <span className="text-3xl">✅</span>
@@ -787,7 +724,6 @@ export default function LocalizadosPage() {
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
-
                 <div className="flex flex-col gap-1.5">
                   <label className="text-gray-400 text-xs font-medium">Hospital o fuente <span className="text-red-500">*</span></label>
                   <input
@@ -798,7 +734,6 @@ export default function LocalizadosPage() {
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
-
                 <div className="flex flex-col gap-1.5">
                   <label className="text-gray-400 text-xs font-medium">Link al tweet / publicación <span className="text-gray-600">(opcional)</span></label>
                   <input
@@ -809,7 +744,6 @@ export default function LocalizadosPage() {
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
-
                 <div className="flex flex-col gap-1.5">
                   <label className="text-gray-400 text-xs font-medium">Nombres de la lista <span className="text-gray-600">(opcional — uno por línea o separados por coma)</span></label>
                   <textarea
@@ -820,18 +754,15 @@ export default function LocalizadosPage() {
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 resize-none font-mono"
                   />
                 </div>
-
                 {submitError && (
                   <p className="text-red-400 text-xs">{submitError}</p>
                 )}
-
                 <button
                   type="submit"
                   disabled={submitLoading}
                   className="w-full py-3 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-sm font-semibold transition-colors disabled:opacity-50">
                   {submitLoading ? "Enviando..." : "Enviar lista →"}
                 </button>
-
                 <p className="text-gray-600 text-[10px] text-center leading-relaxed">
                   La información se revisará manualmente antes de publicarse. Si tienes una foto de la lista, adjúntala al tweet que nos menciones.
                 </p>
