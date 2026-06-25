@@ -1611,7 +1611,7 @@ export default function Home() {
               </div>
               {foundCount != null && foundCount > 0 && (
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-gray-400 text-xs">Encontrados</span>
+                  <a href="/localizados" className="text-gray-400 text-xs hover:text-green-400 transition-colors">Localizados ↗</a>
                   <span className="text-green-400 font-bold text-xs">{foundCount.toLocaleString()}</span>
                 </div>
               )}
