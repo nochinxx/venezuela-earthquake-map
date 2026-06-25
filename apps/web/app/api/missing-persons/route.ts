@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   let base = supabase.from("missing_persons").select(
     countOnly ? "id" : "id,name,age,last_seen_location,lat,lng,description,contact_info,submitted_at,photo_url,status,external_source,source2_url",
     { count: "exact" }
-  );
+  ).or("is_duplicate.eq.false,is_duplicate.is.null");
 
   if (status === "sin-contacto") base = base.or("status.eq.sin-contacto,status.is.null");
   else if (status === "encontrado") base = base.or("status.eq.encontrado,status.eq.localizado");
