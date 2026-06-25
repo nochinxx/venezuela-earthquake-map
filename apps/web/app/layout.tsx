@@ -29,6 +29,9 @@ export const metadata: Metadata = {
     title: "Venezuela Earthquake Map — Daños en tiempo real",
     description: "Terremoto M7.2 · 24 Jun 2026 · Reportes en tiempo real",
   },
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
