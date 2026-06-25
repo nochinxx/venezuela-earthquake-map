@@ -631,7 +631,11 @@ export default function Home() {
               {casualties?.injured != null && <span className="text-white font-bold text-sm">{casualties.injured} <span className="text-red-300 font-normal text-xs">heridos</span></span>}
               {casualties?.missing != null && <span className="text-white font-bold text-sm">{casualties.missing} <span className="text-red-300 font-normal text-xs">desaparecidos</span></span>}
               <span className="text-red-500 text-xs ml-auto italic hidden sm:inline">
-                {casualties?.source_name ?? "Cifra oficial pendiente"}
+                {casualties?.source_url ? (
+                  <a href={casualties.source_url} target="_blank" rel="noopener noreferrer" className="hover:text-red-300 underline">
+                    {casualties.source_name ?? "Fuente oficial"}
+                  </a>
+                ) : (casualties?.source_name ?? "Cifra oficial pendiente")}
                 {casualties?.scraped_at ? ` · ${timeAgo(casualties.scraped_at)}` : ""}
               </span>
             </div>
@@ -643,7 +647,7 @@ export default function Home() {
         {/* Main header row */}
         <div className="flex items-center justify-between px-3 py-2 gap-2">
           <div className="min-w-0">
-            <h1 className="font-bold text-red-400 text-base leading-tight truncate">🇻🇪 Venezuela Earthquake Map</h1>
+            <h1 className="font-bold text-red-400 text-base leading-tight truncate">🇻🇪 SismoVenezuela</h1>
             {stats && (
               <p className="text-gray-500 text-xs">
                 <span className="text-gray-300 font-semibold">{stats.total}</span> reportes
@@ -927,7 +931,7 @@ export default function Home() {
 
         {/* Yummy emergency service card — time-sensitive 24-25 Jun */}
         <div className="absolute top-3 left-3 z-10 max-w-[220px]">
-          <a href="https://www.instagram.com/p/DZ_mMvojQMH/" target="_blank" rel="noopener noreferrer"
+          <a href="https://www.instagram.com/p/DZ_40JluPsA/" target="_blank" rel="noopener noreferrer"
             className="flex flex-col gap-1 bg-green-950/95 border border-green-700 rounded-lg px-3 py-2.5 hover:border-green-500 transition-colors">
             <div className="flex items-center gap-1.5">
               <span className="text-green-400 font-bold text-xs uppercase tracking-wide">🚗 Yummy</span>

@@ -102,60 +102,106 @@ def fetch_all_pages() -> list[dict]:
     return items
 
 
+BATCH_SIZE = 500
+
+
 def sync():
     print(f"[{datetime.now(timezone.utc).isoformat()}] Syncing desaparecidos...")
     items = fetch_all_pages()
     print(f"  Fetched {len(items)} records")
 
-    inserted = updated = skipped = 0
+    # Fetch all existing source_ids in one query
+    existing_ids: set[str] = set()
+    existing_statuses: dict[str, str] = {}
+    offset = 0
+    while True:
+        rows = (
+            sb.table("missing_persons")
+            .select("source_id,status")
+            .not_.is_("source_id", "null")
+            .range(offset, offset + 999)
+            .execute()
+        )
+        if not rows.data:
+            break
+        for r in rows.data:
+            existing_ids.add(r["source_id"])
+            existing_statuses[r["source_id"]] = r.get("status") or ""
+        if len(rows.data) < 1000:
+            break
+        offset += 1000
+
+    print(f"  Existing in DB: {len(existing_ids)}")
+
+    to_insert = []
+    to_update = []  # (source_id, new_status)
 
     for item in items:
         source_id = item["id"]
-        coords = geocode(item.get("ubicacion") or "")
-        lat, lng = (coords[0], coords[1]) if coords else (None, None)
-
-        record = {
-            "name": (item.get("nombre") or "").strip(),
-            "age": item.get("edad"),
-            "last_seen_location": item.get("ubicacion"),
-            "lat": lat,
-            "lng": lng,
-            "description": item.get("descripcion"),
-            "contact_info": item.get("contacto"),
-            "source_id": source_id,
-            "photo_url": item.get("foto"),
-            "status": item.get("estado", "sin-contacto"),
-            "external_source": "desaparecidos-vzla",
-        }
-
-        if not record["name"]:
-            skipped += 1
+        name = (item.get("nombre") or "").strip()
+        if not name:
             continue
 
-        # Check if already exists by source_id
-        existing = (
-            sb.table("missing_persons")
-            .select("id,status")
-            .eq("source_id", source_id)
-            .limit(1)
-            .execute()
-        )
+        coords = geocode(item.get("ubicacion") or "")
+        lat, lng = (coords[0], coords[1]) if coords else (None, None)
+        estado = item.get("estado", "sin-contacto")
 
-        if existing.data:
-            # Only update if status changed (localizados → mark as found)
-            if existing.data[0]["status"] != item.get("estado"):
-                sb.table("missing_persons").update({"status": item.get("estado")}).eq(
-                    "source_id", source_id
-                ).execute()
-                updated += 1
-            else:
-                skipped += 1
+        if source_id in existing_ids:
+            if existing_statuses.get(source_id) != estado:
+                to_update.append((source_id, estado))
         else:
-            sb.table("missing_persons").insert(record).execute()
-            inserted += 1
+            to_insert.append({
+                "name": name,
+                "age": item.get("edad"),
+                "last_seen_location": item.get("ubicacion"),
+                "lat": lat,
+                "lng": lng,
+                "description": item.get("descripcion"),
+                "contact_info": item.get("contacto"),
+                "source_id": source_id,
+                "photo_url": item.get("foto"),
+                "status": estado,
+                "external_source": "desaparecidos-vzla",
+            })
 
-    print(f"  Done — inserted: {inserted}, updated: {updated}, skipped: {skipped}")
-    return inserted, updated, skipped
+    # Deduplicate to_insert by source_id (API pagination may return same record twice)
+    seen_source_ids: set[str] = set()
+    deduped = []
+    for rec in to_insert:
+        sid = rec.get("source_id")
+        if sid:
+            if sid in seen_source_ids:
+                continue
+            seen_source_ids.add(sid)
+        deduped.append(rec)
+    to_insert = deduped
+
+    print(f"  To insert: {len(to_insert)}, to update: {len(to_update)}")
+
+    # Batch insert with per-record fallback on duplicate key errors
+    inserted = 0
+    for i in range(0, len(to_insert), BATCH_SIZE):
+        batch = to_insert[i : i + BATCH_SIZE]
+        try:
+            sb.table("missing_persons").insert(batch).execute()
+            inserted += len(batch)
+        except Exception:
+            # Batch has a duplicate — fall back to individual inserts, skip existing
+            for rec in batch:
+                try:
+                    sb.table("missing_persons").insert(rec).execute()
+                    inserted += 1
+                except Exception:
+                    pass  # already exists, skip
+        if inserted % 1000 < BATCH_SIZE:
+            print(f"  Inserted {inserted}/{len(to_insert)}...")
+
+    # Updates one-by-one (typically very few status changes per run)
+    for source_id, new_status in to_update:
+        sb.table("missing_persons").update({"status": new_status}).eq("source_id", source_id).execute()
+
+    print(f"  Done — inserted: {inserted}, updated: {len(to_update)}, skipped: {len(existing_ids) - len(to_update)}")
+    return inserted, len(to_update)
 
 
 if __name__ == "__main__":
