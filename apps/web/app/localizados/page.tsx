@@ -50,6 +50,7 @@ export default function LocalizadosPage() {
   const [q, setQ] = useState("");
   const [copied, setCopied] = useState(false);
   const [showMethod, setShowMethod] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Load matched (our cross-references) on mount
   useEffect(() => {
@@ -72,10 +73,13 @@ export default function LocalizadosPage() {
   const people = tab === "matched" ? matched : all;
   const loading = tab === "matched" ? loadingMatched : loadingAll;
 
-  // For matched tab: group by source tweet
+  // For matched tab: only confirmed DB matches (had a prior missing report)
+  const confirmedMatched = useMemo(() => matched.filter(p => p.source_id), [matched]);
+
+  // Group by source tweet
   const groupedMatched = useMemo(() => {
     const map = new Map<string, { label: string; title: string; tweetUrl: string | null; people: Person[] }>();
-    for (const p of matched) {
+    for (const p of confirmedMatched) {
       const key = p.source2_url ?? "manual";
       if (!map.has(key)) {
         map.set(key, {
@@ -148,7 +152,7 @@ export default function LocalizadosPage() {
               className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === "matched" ? "bg-cyan-900 text-cyan-200" : "text-gray-500 hover:text-gray-300"}`}>
               🔍 Cruce SismoVenezuela
               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab === "matched" ? "bg-cyan-700 text-cyan-100" : "bg-gray-800 text-gray-500"}`}>
-                {matched.length}
+                {confirmedMatched.length}
               </span>
             </button>
             <button
@@ -254,34 +258,57 @@ export default function LocalizadosPage() {
                   <span className="text-gray-500 text-xs shrink-0">{group.people.length} persona{group.people.length !== 1 ? "s" : ""}</span>
                 </div>
                 <div className="flex flex-col gap-2">
-                  {group.people.map((p, pi) => (
-                    <div key={pi} className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-cyan-900/60 border border-cyan-700 flex items-center justify-center text-cyan-400 text-sm shrink-0 mt-0.5">✓</div>
-                      <div className="flex flex-col gap-1 min-w-0">
-                        <p className="font-semibold text-white text-sm">{p.name}</p>
-                        {p.age && <p className="text-gray-500 text-xs">{p.age} años</p>}
-                        {p.last_seen_location && <p className="text-gray-400 text-xs">📍 {p.last_seen_location}</p>}
-                        <div className="flex flex-col gap-0.5 mt-0.5 border-t border-gray-800 pt-1.5">
-                          {/* Original missing report source */}
-                          {p.source_id
-                            ? <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer"
-                                className="text-violet-400 text-xs hover:text-violet-200 hover:underline">
-                                📋 Reportado como desaparecido en desaparecidosterremotovenezuela.com ↗
-                              </a>
-                            : <p className="text-gray-500 text-xs">📋 Reportado en lista hospitalaria · sin registro previo en plataformas</p>
-                          }
-                          {/* Confirmation source — hospital tweet */}
-                          {p.source2_url
-                            ? <a href={p.source2_url} target="_blank" rel="noopener noreferrer"
-                                className="text-cyan-500 text-xs hover:text-cyan-300 hover:underline">
-                                🏥 Confirmado: {group.title} ↗
-                              </a>
-                            : <p className="text-cyan-400 text-xs">🏥 {group.title}</p>
-                          }
-                        </div>
+                  {group.people.map((p, pi) => {
+                    const isExpanded = expandedId === p.id;
+                    const apiUrl = `https://desaparecidos-terremoto-api.theempire.tech/api/personas/${p.source_id}`;
+                    return (
+                      <div key={pi} className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+                        {/* Clickable header row */}
+                        <button
+                          className="w-full px-4 py-3 flex items-start gap-3 text-left hover:bg-gray-800/40 transition-colors"
+                          onClick={() => setExpandedId(isExpanded ? null : p.id)}>
+                          <div className="w-8 h-8 rounded-full bg-cyan-900/60 border border-cyan-700 flex items-center justify-center text-cyan-400 text-sm shrink-0 mt-0.5">✓</div>
+                          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                            <p className="font-semibold text-white text-sm">{p.name}</p>
+                            {p.age && <p className="text-gray-500 text-xs">{p.age} años</p>}
+                            {p.last_seen_location && <p className="text-gray-400 text-xs">📍 {p.last_seen_location}</p>}
+                          </div>
+                          <span className="text-gray-600 text-xs shrink-0 mt-1">{isExpanded ? "▲" : "▼"}</span>
+                        </button>
+
+                        {/* Expanded detail */}
+                        {isExpanded && (
+                          <div className="px-4 pb-3 flex flex-col gap-2 border-t border-gray-800">
+                            {p.description && (
+                              <p className="text-gray-400 text-xs mt-2 leading-relaxed">{p.description}</p>
+                            )}
+                            <div className="flex flex-col gap-1.5 mt-1">
+                              {/* Missing report source */}
+                              <div className="flex flex-col gap-0.5">
+                                <p className="text-gray-600 text-[10px] uppercase tracking-wide">Reporte de desaparecido</p>
+                                <a href={apiUrl} target="_blank" rel="noopener noreferrer"
+                                  className="text-violet-400 text-xs hover:text-violet-200 hover:underline">
+                                  📋 Ver registro en desaparecidosterremotovenezuela.com ↗
+                                </a>
+                                <p className="text-gray-600 text-[10px]">* abre los datos crudos del registro</p>
+                              </div>
+                              {/* Hospital confirmation */}
+                              <div className="flex flex-col gap-0.5">
+                                <p className="text-gray-600 text-[10px] uppercase tracking-wide">Confirmación hospitalaria</p>
+                                {p.source2_url
+                                  ? <a href={p.source2_url} target="_blank" rel="noopener noreferrer"
+                                      className="text-cyan-500 text-xs hover:text-cyan-300 hover:underline">
+                                      🏥 {group.title} ↗
+                                    </a>
+                                  : <p className="text-cyan-400 text-xs">🏥 {group.title}</p>
+                                }
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}
