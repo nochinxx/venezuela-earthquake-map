@@ -13,8 +13,21 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://venezuela-earthquake-map.vercel.app"),
   title: "Venezuela Earthquake Map — Daños en tiempo real",
   description: "Mapa en tiempo real de daños del terremoto en Venezuela (24 Jun 2026). Reportes de YouTube, X/Twitter e Instagram. Centros de acopio y números de emergencia.",
+  openGraph: {
+    title: "Venezuela Earthquake Map — Daños en tiempo real",
+    description: "Terremoto M7.2 · 24 Jun 2026 · Reportes en tiempo real de YouTube, X e Instagram",
+    siteName: "Venezuela Earthquake Map",
+    locale: "es_VE",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Venezuela Earthquake Map — Daños en tiempo real",
+    description: "Terremoto M7.2 · 24 Jun 2026 · Reportes en tiempo real",
+  },
 };
 
 export default function RootLayout({

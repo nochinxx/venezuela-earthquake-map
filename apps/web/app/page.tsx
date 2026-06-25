@@ -221,6 +221,47 @@ const DAMAGE_LABEL: Record<number, string> = {
 type SortOrder = "newest" | "oldest";
 type SourceFilter = "" | "twitter" | "instagram" | "youtube";
 
+function FeedCard({ r, flagged, setFlagged, api }: { r: Report; flagged: Set<string>; setFlagged: React.Dispatch<React.SetStateAction<Set<string>>>; api: string }) {
+  return (
+    <div className="p-3 flex flex-col gap-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded uppercase shrink-0 ${
+            r.source === "twitter" ? "bg-blue-900 text-blue-300" :
+            r.source === "instagram" ? "bg-pink-900 text-pink-300" : "bg-red-900 text-red-300"
+          }`}>{r.source}</span>
+          {r.location_name
+            ? <span className="text-xs text-gray-400 truncate">📍 {r.location_name}</span>
+            : <span className="text-xs text-gray-600 italic">sin ubicación</span>
+          }
+          {r.credibility === "high" && <span className="text-xs text-green-400 shrink-0">✓</span>}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {r.source_url && (
+            <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300">↗</a>
+          )}
+          <button onClick={async () => {
+            if (flagged.has(r.id)) return;
+            await fetch(`${api}/reports/${r.id}`, { method: "POST" });
+            setFlagged(f => new Set(f).add(r.id));
+          }} className={`text-xs ${flagged.has(r.id) ? "text-orange-400" : "text-gray-600 hover:text-orange-400"}`}>🚩</button>
+        </div>
+      </div>
+      {r.text_content && (
+        <p className="text-xs text-gray-300 leading-relaxed line-clamp-4">{r.text_content}</p>
+      )}
+      {r.media_urls?.length > 0 && (
+        <img src={r.media_urls[0]} alt="" className="rounded w-full object-cover max-h-32" />
+      )}
+      <span className="text-gray-600 text-xs">
+        {r.author ? `@${r.author}` : ""}
+        {(r.post_time || r.scraped_at) ? ` · ${timeAgo((r.post_time || r.scraped_at)!)}` : ""}
+        {r.damage_level ? ` · ${DAMAGE_LABEL[r.damage_level]}` : ""}
+      </span>
+    </div>
+  );
+}
+
 export default function Home() {
   const mapRef = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -250,6 +291,8 @@ export default function Home() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
   const [bannerOpen, setBannerOpen] = useState(true);
+  const [feed, setFeed] = useState<Report[]>([]);
+  const [feedLoading, setFeedLoading] = useState(false);
 
   useEffect(() => {
     if (!localStorage.getItem("wt_seen")) setShowWalkthrough(true);
@@ -465,6 +508,17 @@ export default function Home() {
     });
   }, [showRelief]);
 
+  // Auto-load source feed when a filter is active and no map location is selected
+  useEffect(() => {
+    if (!source || selected.length > 0) { setFeed([]); return; }
+    setFeedLoading(true);
+    fetch(`${API}/reports/feed?source=${source}&limit=60`)
+      .then(r => r.json())
+      .then((rows: Report[]) => setFeed(rows.map(r => ({ ...r, media_urls: Array.isArray(r.media_urls) ? r.media_urls : [] }))))
+      .catch(() => {})
+      .finally(() => setFeedLoading(false));
+  }, [source, selected.length]);
+
   const sortedSelected = sortReports(selected, panelSort);
 
   return (
@@ -595,6 +649,44 @@ export default function Home() {
 
       <div className="flex flex-1 overflow-hidden relative">
         <div ref={mapRef} className="flex-1" />
+
+        {/* Source feed panel — shows when a filter is active but no map click */}
+        {feed.length > 0 && selected.length === 0 && (
+          <>
+          {/* Desktop */}
+          <div className="hidden md:flex flex-col absolute right-0 top-0 h-full w-96 bg-gray-900/95 border-l border-gray-800 z-10">
+            <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-4 py-3 shrink-0">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="font-semibold text-white text-sm capitalize">
+                    {source === "twitter" ? "📢 X / Twitter" : source === "instagram" ? "📸 Instagram" : source === "youtube" ? "▶️ YouTube" : "Feed"}
+                  </p>
+                  <p className="text-gray-400 text-xs">{feed.length} reportes · incluye sin ubicación</p>
+                </div>
+                <button onClick={() => { setSource(""); setFeed([]); }} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+              </div>
+            </div>
+            <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
+              {feedLoading ? (
+                <p className="text-gray-500 text-sm p-4">Cargando...</p>
+              ) : feed.map((r) => <FeedCard key={r.id} r={r} flagged={flagged} setFlagged={setFlagged} api={API} />)}
+            </div>
+          </div>
+          {/* Mobile */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-900/98 border-t border-gray-800 z-20 flex flex-col max-h-[55vh]">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 shrink-0">
+              <p className="font-semibold text-white text-sm capitalize">
+                {source === "instagram" ? "📸 Instagram" : source === "twitter" ? "📢 X/Twitter" : "▶️ YouTube"}
+                <span className="text-gray-500 font-normal text-xs ml-2">{feed.length} reportes</span>
+              </p>
+              <button onClick={() => { setSource(""); setFeed([]); }} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+            <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
+              {feed.map((r) => <FeedCard key={`m-${r.id}`} r={r} flagged={flagged} setFlagged={setFlagged} api={API} />)}
+            </div>
+          </div>
+          </>
+        )}
 
         {selected.length > 0 && (
           <>
