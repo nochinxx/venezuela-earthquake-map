@@ -22,27 +22,23 @@ sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"
 
 PROFILE_DIR = Path.home() / "agent" / "browser-profile"
 
-# Verified accounts — tweet text from these is trusted as sourced
-VERIFIED_ACCOUNTS = [
-    "@USEmbassyVE",
-    "@CruzRojaVzla",
-    "@davidplacer",
-    "@APLatam",
-    "@AP",
-    "@CNNEspanol",
-    "@CNN",
-    "@Reuters",
-    "@FUNVISIS",
-    "@VTV_Vzla",
+# Verified accounts to scrape directly (in priority order)
+VERIFIED_TIMELINES = [
+    ("davidplacer", "David Placer / CNN"),
+    ("USEmbassyVE", "US Embassy Venezuela"),
+    ("CruzRojaVzla", "Cruz Roja Venezolana"),
+    ("APLatam", "AP Noticias"),
+    ("Reuters", "Reuters"),
+    ("CNNEspanol", "CNN en Español"),
+    ("FUNVISIS", "FUNVISIS"),
+    ("VTV_Vzla", "VTV Venezuela"),
+    ("convzlacomando", "Comando Venezuela"),
+    ("MariaCorinaYA", "María Corina Machado"),
+    ("CarlaAngola", "Carla Angola"),
 ]
 
-# Search queries to find casualty reports on X
-SEARCHES = [
-    "muertos terremoto Venezuela 2026 (from:USEmbassyVE OR from:CruzRojaVzla OR from:davidplacer OR from:APLatam OR from:CNNEspanol OR from:Reuters)",
-    "muertos OR fallecidos OR víctimas terremoto Venezuela junio 2026 -is:retweet",
-    "dead injured Venezuela earthquake 2026 -is:retweet",
-    "heridos terremoto Venezuela 2026 -is:retweet",
-]
+# AP News search as web fallback
+AP_SEARCH_URL = "https://apnews.com/search?q=venezuela+earthquake&s=2"
 
 NUMBER_WORDS = {
     "un": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
@@ -139,16 +135,41 @@ def get_latest() -> dict | None:
     return rows[0] if rows else None
 
 
-def scrape_x(page, query: str) -> list[dict]:
-    import urllib.parse
-    url = f"https://x.com/search?q={urllib.parse.quote(query)}&f=live"
-    page.goto(url, timeout=30000)
+def scrape_timeline(page, handle: str, source_label: str) -> list[dict]:
+    """Scrape recent tweets from a specific verified account."""
+    page.goto(f"https://x.com/{handle}", timeout=30000)
     try:
         page.wait_for_selector("article[data-testid='tweet']", timeout=12000)
     except Exception:
         pass
     time.sleep(2)
-    return page.evaluate(EXTRACT_JS)
+    tweets = page.evaluate(EXTRACT_JS)
+    results = []
+    for t in tweets:
+        # Only care about recent earthquake-related tweets
+        text = t.get("text", "").lower()
+        if not any(w in text for w in ["terremoto", "sismo", "temblor", "earthquake", "muerto", "fallecido", "herido", "víctima", "dead", "killed", "injur"]):
+            continue
+        nums = extract_numbers(t["text"])
+        if nums:
+            results.append({**nums, "source": source_label, "url": t.get("url", ""), "text": t["text"][:150]})
+    return results
+
+
+def scrape_ap_web(page) -> list[dict]:
+    """Scrape AP News search results for Venezuela earthquake casualty figures."""
+    try:
+        page.goto(AP_SEARCH_URL, timeout=30000)
+        page.wait_for_load_state("domcontentloaded", timeout=10000)
+        time.sleep(2)
+        # Get all visible text from article previews
+        text = page.evaluate("() => document.body.innerText")
+        nums = extract_numbers(text)
+        if nums:
+            return [{**nums, "source": "AP News", "url": AP_SEARCH_URL, "text": text[:200]}]
+    except Exception as e:
+        print(f"  [ap web error] {e}")
+    return []
 
 
 def main():
@@ -166,8 +187,7 @@ def main():
         print(f"[casualties] Manual update saved: {args.deaths} muertos, {args.injured} heridos — {args.source}")
         return
 
-    print("[casualties] Scraping verified sources for casualty figures...")
-    best = {"deaths": None, "injured": None, "missing": None, "source": None, "url": None}
+    print("[casualties] Scraping verified timelines for casualty figures...")
     candidates = []
 
     with sync_playwright() as p:
@@ -179,48 +199,47 @@ def main():
         page = ctx.new_page()
         page.set_extra_http_headers({"Accept-Language": "es,en;q=0.9"})
 
-        for query in SEARCHES:
-            print(f"  Searching: {query[:70]}")
+        for handle, label in VERIFIED_TIMELINES:
+            print(f"  @{handle}")
             try:
-                tweets = scrape_x(page, query)
-                print(f"    {len(tweets)} tweets")
-                for t in tweets:
-                    nums = extract_numbers(t["text"])
-                    if not nums:
-                        continue
-                    verified = is_verified_source(t.get("author", ""))
-                    candidates.append({
-                        **nums,
-                        "source": t.get("author", "X/Twitter"),
-                        "url": t.get("url", ""),
-                        "verified": verified,
-                        "text": t["text"][:120],
-                    })
+                found = scrape_timeline(page, handle, label)
+                if found:
+                    print(f"    → {found[0].get('deaths')} muertos, {found[0].get('injured')} heridos: {found[0]['text'][:80]}")
+                    candidates.extend(found)
+                else:
+                    print(f"    → no figures")
             except Exception as e:
-                print(f"  [error] {e}")
+                print(f"    [error] {e}")
+
+        # AP News web fallback
+        print("  AP News (web)")
+        try:
+            found = scrape_ap_web(page)
+            if found:
+                print(f"    → {found[0].get('deaths')} muertos, {found[0].get('injured')} heridos")
+                candidates.extend(found)
+        except Exception as e:
+            print(f"    [error] {e}")
 
         ctx.close()
 
     if not candidates:
-        print("[casualties] No casualty figures found")
+        print("[casualties] No casualty figures found in verified sources")
         return
 
-    # Prefer verified sources, then highest death count (conservative but informative)
-    verified = [c for c in candidates if c["verified"]]
-    pool = verified if verified else candidates
-    # Pick the one with highest deaths mentioned by a verified source
-    pool.sort(key=lambda c: (c.get("deaths") or 0), reverse=True)
-    chosen = pool[0]
+    # Prioritize: most deaths reported (verified sources only, then any)
+    candidates.sort(key=lambda c: (c.get("deaths") or 0), reverse=True)
+    chosen = candidates[0]
 
     print(f"\n  Best figure: {chosen.get('deaths')} muertos, {chosen.get('injured')} heridos")
-    print(f"  Source: {chosen['source']} ({'verified' if chosen['verified'] else 'unverified'})")
-    print(f"  Text: {chosen['text']}")
+    print(f"  Source: {chosen['source']}")
+    print(f"  Text: {chosen['text'][:100]}")
 
     push_stat(
         chosen.get("deaths"), chosen.get("injured"), chosen.get("missing"),
         chosen["source"], chosen["url"], auto=True
     )
-    print("[casualties] Done")
+    print("[casualties] Saved")
 
 
 if __name__ == "__main__":

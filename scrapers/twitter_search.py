@@ -32,6 +32,9 @@ SEARCHES = [
     "sismo Venezuela edificio derrumbe 2026",
     "Venezuela earthquake 2026 damage",
     "Yumare OR Carabobo terremoto 2026",
+    "from:convzlacomando terremoto OR sismo",
+    "from:MariaCorinaYA terremoto OR sismo",
+    "from:CarlaAngola terremoto OR sismo",
 ]
 
 LOCATIONS = {
