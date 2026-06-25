@@ -489,34 +489,18 @@ export default function Home() {
       const DAMAGE_LABEL: Record<string, string> = { total: "🔴 Derrumbe total", severo: "🟠 Daño severo", parcial: "🟡 Daño parcial" };
       const SOURCE_URL: Record<string, string> = { "terremotovenezuela.com": "https://terremotovenezuela.com" };
       m.on("click", LAYER, (e) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (e as any).stopPropagation();
         const feat = e.features?.[0];
         if (!feat) return;
         const p = feat.properties as Record<string, unknown>;
         const [lng, lat] = (feat.geometry as GeoJSON.Point).coordinates;
-        if (buildingPopupRef.current) buildingPopupRef.current.remove();
-        const damageLabel = p.damage_type ? (DAMAGE_LABEL[p.damage_type as string] ?? String(p.damage_type)) : "";
-        const affected = p.affected ? `<br/>👥 ${p.affected} afectados` : "";
-        const confirmed = p.confirmations ? `<br/>✅ ${p.confirmations} confirmaciones` : "";
+        if (buildingPopupRef.current) { buildingPopupRef.current.remove(); buildingPopupRef.current = null; }
         const src = p.source as string | undefined;
         const extId = p.external_id as string | undefined;
         const directUrl = src === "terremotovenezuela.com" && extId
           ? `https://terremotovenezuela.com/edificio/${extId}`
           : (SOURCE_URL[src ?? ""] ?? null);
-        const srcLink = directUrl ? `<br/><a href="${directUrl}" target="_blank" style="color:#1d9bf0;font-size:10px;text-decoration:underline">Ver ficha completa →</a>` : "";
+        setSelectedBuilding({ ...p, _lng: lng, _lat: lat, _directUrl: directUrl ?? null });
         setPanelTab("edificios");
-        buildingPopupRef.current = new mapboxgl.Popup({ maxWidth: "280px" })
-          .setLngLat([lng, lat])
-          .setHTML(
-            `<div style="font-size:12px;color:#111;padding:2px 0">
-              <strong style="font-size:13px">🏚 ${p.place ?? "Edificio afectado"}</strong>
-              ${damageLabel ? `<br/><span style="font-size:11px;font-weight:600">${damageLabel}</span>` : ""}
-              ${p.needs ? `<br/><span style="color:#444">${p.needs}</span>` : ""}
-              ${affected}${confirmed}${srcLink}
-            </div>`
-          )
-          .addTo(m);
       });
       m.on("mouseenter", LAYER, () => { m.getCanvas().style.cursor = "pointer"; });
       m.on("mouseleave", LAYER, () => { m.getCanvas().style.cursor = ""; });
@@ -608,6 +592,7 @@ export default function Home() {
       });
 
       m.on("click", "reports-points", async (e) => {
+        if (m.queryRenderedFeatures(e.point, { layers: ["building-damage-points"] }).length > 0) return;
         const feat = e.features?.[0];
         if (!feat) return;
         const [lng, lat] = (feat.geometry as GeoJSON.Point).coordinates;
@@ -1060,7 +1045,7 @@ export default function Home() {
                 className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 ${panelTab === "solicitudes" ? "text-orange-400 border-orange-500" : "text-gray-500 border-transparent hover:text-gray-300"}`}>
                 🆘 Ayuda{needsCount != null && needsCount > 0 ? ` (${needsCount})` : ""}
               </button>
-              <button onClick={() => { setPanelTab(null); setSelected([]); setSelectedLocation(null); setSelectedExternalPerson(null); }}
+              <button onClick={() => { setPanelTab(null); setSelected([]); setSelectedLocation(null); setSelectedExternalPerson(null); setSelectedBuilding(null); }}
                 className="px-3 text-gray-500 hover:text-white text-lg leading-none shrink-0">×</button>
             </div>
 
@@ -1260,6 +1245,25 @@ export default function Home() {
             {/* Edificios tab */}
             {panelTab === "edificios" && (
               <div className="flex flex-col flex-1 overflow-hidden">
+                {/* Selected building card */}
+                {selectedBuilding && (() => {
+                  const DAMAGE_LABEL: Record<string, string> = { total: "🔴 Derrumbe total", severo: "🟠 Daño severo", parcial: "🟡 Daño parcial" };
+                  const dmg = selectedBuilding.damage_type ? (DAMAGE_LABEL[String(selectedBuilding.damage_type)] ?? String(selectedBuilding.damage_type)) : null;
+                  const url = selectedBuilding._directUrl as string | null;
+                  return (
+                    <div className="mx-3 mt-3 mb-1 bg-amber-950/80 border border-amber-700 rounded-lg px-4 py-3 flex flex-col gap-1 shrink-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-white font-semibold text-sm leading-snug">🏚 {String(selectedBuilding.place ?? "Edificio afectado")}</p>
+                        <button onClick={() => setSelectedBuilding(null)} className="text-amber-700 hover:text-amber-400 text-base leading-none shrink-0">×</button>
+                      </div>
+                      {dmg && <p className="text-amber-300 text-xs font-semibold">{dmg}</p>}
+                      {selectedBuilding.needs != null && <p className="text-gray-300 text-xs">{String(selectedBuilding.needs)}</p>}
+                      {selectedBuilding.affected != null && <p className="text-gray-400 text-xs">👥 {String(selectedBuilding.affected)} afectados</p>}
+                      {selectedBuilding.confirmations != null && <p className="text-gray-400 text-xs">✅ {String(selectedBuilding.confirmations)} confirmaciones</p>}
+                      {url && <a href={url} target="_blank" rel="noopener noreferrer" className="text-amber-400 text-xs hover:underline mt-0.5">Ver ficha completa →</a>}
+                    </div>
+                  );
+                })()}
                 <div className="px-4 py-3 border-b border-gray-800 shrink-0">
                   <input
                     value={buildingSearch}
@@ -1388,7 +1392,7 @@ export default function Home() {
                 className={`flex-1 py-2.5 text-xs font-semibold border-b-2 ${panelTab === "solicitudes" ? "text-orange-400 border-orange-500" : "text-gray-500 border-transparent"}`}>
                 🆘 Ayuda
               </button>
-              <button onClick={() => { setPanelTab(null); setSelected([]); setSelectedLocation(null); setSelectedExternalPerson(null); }}
+              <button onClick={() => { setPanelTab(null); setSelected([]); setSelectedLocation(null); setSelectedExternalPerson(null); setSelectedBuilding(null); }}
                 className="px-3 text-gray-500 text-lg leading-none shrink-0">×</button>
             </div>
 
@@ -1525,6 +1529,23 @@ export default function Home() {
             {/* Edificios tab – mobile */}
             {panelTab === "edificios" && (
               <>
+                {selectedBuilding && (() => {
+                  const DAMAGE_LABEL: Record<string, string> = { total: "🔴 Derrumbe total", severo: "🟠 Daño severo", parcial: "🟡 Daño parcial" };
+                  const dmg = selectedBuilding.damage_type ? (DAMAGE_LABEL[String(selectedBuilding.damage_type)] ?? String(selectedBuilding.damage_type)) : null;
+                  const url = selectedBuilding._directUrl as string | null;
+                  return (
+                    <div className="mx-3 mt-2.5 mb-1 bg-amber-950/80 border border-amber-700 rounded-lg px-3 py-2.5 flex flex-col gap-1 shrink-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-white font-semibold text-sm leading-snug">🏚 {String(selectedBuilding.place ?? "Edificio afectado")}</p>
+                        <button onClick={() => setSelectedBuilding(null)} className="text-amber-700 hover:text-amber-400 text-base leading-none shrink-0">×</button>
+                      </div>
+                      {dmg && <p className="text-amber-300 text-xs font-semibold">{dmg}</p>}
+                      {selectedBuilding.needs != null && <p className="text-gray-300 text-xs">{String(selectedBuilding.needs)}</p>}
+                      {selectedBuilding.affected != null && <p className="text-gray-400 text-xs">👥 {String(selectedBuilding.affected)} afectados</p>}
+                      {url && <a href={url} target="_blank" rel="noopener noreferrer" className="text-amber-400 text-xs hover:underline">Ver ficha completa →</a>}
+                    </div>
+                  );
+                })()}
                 <div className="px-3 py-2 border-b border-gray-800 shrink-0">
                   <input
                     value={buildingSearch}
