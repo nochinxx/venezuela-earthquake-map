@@ -1682,6 +1682,30 @@ export default function Home() {
                 </div>
               ))}
 
+              {/* Helpful links */}
+              <div className="border-t border-gray-800 pt-4 flex flex-col gap-3">
+                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">Recursos adicionales</p>
+                <div className="flex flex-col gap-2">
+                  {[
+                    { emoji: "🆘", name: "Venezuela Ayuda", url: "https://venezuela-ayuda.com", desc: "Plataforma integral: desaparecidos, solicitudes de ayuda, voluntarios, estado de seguridad y mapa propio. No requiere registro." },
+                    { emoji: "🏗️", name: "Operación Todos Con VZLA (ConVzla)", url: "https://x.com/ConVzlaComando", desc: "Coordinación de centros de acopio en Distrito Capital y otros estados. Activo en Twitter/X con actualizaciones en tiempo real." },
+                    { emoji: "🍽️", name: "World Central Kitchen", url: "https://wck.org", desc: "Organización de ayuda alimentaria de José Andrés — comprometió $1M al fondo de respuesta en Venezuela." },
+                    { emoji: "🔴", name: "Cruz Roja Venezuela", url: "https://cruzrojavenezuela.org", desc: "Coordinación local de rescate, primeros auxilios y asistencia humanitaria." },
+                    { emoji: "🌐", name: "IFRC — Búsqueda de familiares", url: "https://x.com/IFRC_es/status/2070008369109250423", desc: "Si estás fuera de Venezuela, la Cruz Roja puede ayudarte a restablecer contacto desde Argentina, Colombia, Costa Rica, Ecuador, Honduras y México." },
+                    { emoji: "📋", name: "Protección Civil Venezuela", url: "https://twitter.com/PCivilVenezuela", desc: "Organismo oficial de respuesta a emergencias. Líneas: 0800-5588427 / 0800-2668446." },
+                  ].map(l => (
+                    <div key={l.url} className="flex gap-3 items-start">
+                      <span className="text-lg shrink-0 mt-0.5">{l.emoji}</span>
+                      <div className="min-w-0">
+                        <a href={l.url} target="_blank" rel="noopener noreferrer"
+                          className="text-sm font-medium text-white hover:text-blue-300 transition-colors">{l.name} ↗</a>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">{l.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* Methodology / FAQ */}
               <div className="border-t border-gray-800 pt-4 flex flex-col gap-3">
                 <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">¿Cómo funciona este mapa?</p>
