@@ -393,8 +393,8 @@ export default function Home() {
           "circle-opacity": 0.92,
         },
       });
-      const DAMAGE_LABEL: Record<string, string> = { total: "🔴 Derrumbe total", severo: "🟠 Daño severo", parcial: "🟡 Daño parcial", critical: "🆘 Rescate urgente" };
-      const SOURCE_URL: Record<string, string> = { "terremotovenezuela.com": "https://terremotovenezuela.com", "terremotovenezuela.app": "https://terremotovenezuela.app" };
+      const DAMAGE_LABEL: Record<string, string> = { total: "🔴 Derrumbe total", severo: "🟠 Daño severo", parcial: "🟡 Daño parcial" };
+      const SOURCE_URL: Record<string, string> = { "terremotovenezuela.com": "https://terremotovenezuela.com" };
       m.on("click", LAYER, (e) => {
         const feat = e.features?.[0];
         if (!feat) return;
