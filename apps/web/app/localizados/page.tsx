@@ -261,15 +261,19 @@ export default function LocalizadosPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-200 font-semibold mb-1">Confianza por nivel</p>
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-green-400 shrink-0"></span>
-                        <span className="text-gray-400"><strong className="text-gray-300">≥ 85 %</strong> — alta confianza: nombre prácticamente idéntico, variaciones menores de ortografía</span>
+                    <p className="text-gray-200 font-semibold mb-1">Nivel de confianza — medallas</p>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-start gap-2">
+                        <span className="text-base leading-none shrink-0">🥇</span>
+                        <span className="text-gray-400"><strong className="text-gray-300">Alta confianza (≥ 85 %)</strong> — nombre prácticamente idéntico o variación ortográfica menor. Ej: "Anderson Mendoza" ↔ "Anderson Mendoza" (100 %), "Matías Jiménez" ↔ "Mathias JIMENEZ" (97 %)</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0"></span>
-                        <span className="text-gray-400"><strong className="text-gray-300">72 – 84 %</strong> — confianza media: posible variación de apellido, nombre abreviado, o error tipográfico en la fuente</span>
+                      <div className="flex items-start gap-2">
+                        <span className="text-base leading-none shrink-0">🥈</span>
+                        <span className="text-gray-400"><strong className="text-gray-300">Confianza media (72 – 84 %)</strong> — posible variación de apellido, nombre abreviado o error tipográfico. Requiere verificación manual antes de confirmar</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-base leading-none shrink-0">🏅</span>
+                        <span className="text-gray-400"><strong className="text-gray-300">Sin nivel registrado</strong> — cruce anterior a este sistema de confianza</span>
                       </div>
                     </div>
                   </div>
@@ -292,8 +296,8 @@ export default function LocalizadosPage() {
           ) : tab === "listas" ? (
             <p className="text-gray-400 text-xs leading-relaxed">
               Listas completas de pacientes publicadas en hospitales, tal como fueron difundidas.{" "}
-              <strong className="text-amber-400">Incluye a todas las personas de cada lista</strong>, estuvieran o no en la base de desaparecidos. Las marcadas con{" "}
-              <span className="text-cyan-400 font-semibold">✓ cruce</span> fueron confirmadas contra la base de datos.
+              <strong className="text-amber-400">Incluye a todas las personas de cada lista</strong>, estuvieran o no en la base de desaparecidos. Las que muestran{" "}
+              <span className="text-sm">🥇</span> fueron cruzadas con alta confianza contra la base de desaparecidos.
             </p>
           ) : (
             <p className="text-gray-400 text-xs leading-relaxed">
