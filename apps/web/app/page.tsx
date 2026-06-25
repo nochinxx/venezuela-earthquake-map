@@ -358,7 +358,7 @@ export default function Home() {
   useEffect(() => {
     if (!localStorage.getItem("wt_seen")) setShowWalkthrough(true);
     if (window.innerWidth >= 768) setLegendOpen(true);
-    fetch(`${API}/missing-persons?count=1`)
+    fetch(`${API}/missing-persons?count=1&status=sin-contacto`)
       .then(r => r.json())
       .then((res: { total: number }) => setMissingTotal(res.total ?? null))
       .catch(() => {});

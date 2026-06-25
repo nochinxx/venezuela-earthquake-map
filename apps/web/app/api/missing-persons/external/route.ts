@@ -115,6 +115,7 @@ export async function GET() {
         .from("missing_persons")
         .select("id,name,age,last_seen_location,description,contact_info,external_source,photo_url,submitted_at")
         .or("is_duplicate.eq.false,is_duplicate.is.null")
+        .or("status.eq.sin-contacto,status.is.null")
         .range(offset, offset + PAGE - 1);
       if (error || !data?.length) break;
       all.push(...data);
