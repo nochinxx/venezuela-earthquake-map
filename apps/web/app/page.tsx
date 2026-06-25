@@ -50,6 +50,67 @@ interface ReliefCenter {
   scraped_at: string;
 }
 
+interface MissingPerson {
+  id: string;
+  name: string;
+  age: number | null;
+  last_seen_location: string;
+  lat: number | null;
+  lng: number | null;
+  description: string;
+  contact_info: string;
+  submitted_at: string;
+}
+
+const WALKTHROUGH_STEPS = [
+  {
+    icon: "🌡️",
+    title: "Mapa de calor",
+    desc: "Cada zona roja representa reportes de daños. El color más intenso indica mayor concentración de reportes en esa área. Los clústeres rojos agrupan varios reportes cercanos.",
+  },
+  {
+    icon: "📍",
+    title: "Haz clic en el mapa",
+    desc: "Toca cualquier punto o clúster para ver los reportes individuales de esa zona en el panel derecho. Incluye videos de YouTube, tweets, posts de Instagram y comentarios.",
+  },
+  {
+    icon: "🔎",
+    title: "Filtra por fuente",
+    desc: "Usa los botones en la barra superior para ver solo reportes de YouTube, X/Twitter o Instagram. El panel de reportes también se actualiza con el filtro activo.",
+  },
+  {
+    icon: "📦",
+    title: "Centros de acopio",
+    desc: "Los puntos verdes 📦 son centros de recolección de donaciones verificados. Haz clic en uno para ver la dirección, estado y qué artículos aceptan.",
+  },
+  {
+    icon: "🧍",
+    title: "Personas desaparecidas",
+    desc: "Usa '🧍 Desaparecidos' para reportar una persona que no has podido contactar desde el terremoto. Los reportes aparecen como marcadores naranjas en el mapa.",
+  },
+  {
+    icon: "⏱️",
+    title: "Actualización automática",
+    desc: "El mapa se alimenta de YouTube, X/Twitter e Instagram cada 10 minutos. Recarga la página para ver lo más reciente. Las cifras de víctimas se actualizan desde fuentes verificadas.",
+  },
+];
+
+const LOCATIONS_MAP: Record<string, [number, number]> = {
+  "caracas": [10.4806, -66.9036], "valencia": [10.162, -67.9903],
+  "maracaibo": [10.6316, -71.6428], "barquisimeto": [10.0647, -69.3571],
+  "maracay": [10.2469, -67.5958], "yumare": [10.6383, -68.6847],
+  "san felipe": [10.3394, -68.7453], "la guaira": [10.6013, -66.9337],
+  "cumana": [10.4574, -64.1744], "merida": [8.5916, -71.144],
+  "carabobo": [10.162, -67.9903], "miranda": [10.3, -66.6],
+  "aragua": [10.2603, -67.5894], "san bernardino": [10.5050, -66.9100],
+};
+
+function resolveCoords(location: string): [number | null, number | null] {
+  const key = location.toLowerCase().trim();
+  const match = Object.entries(LOCATIONS_MAP).find(([k]) => key.includes(k) || k.includes(key));
+  return match ? match[1] : [null, null];
+}
+
 const DAMAGE_COLOR: Record<number, string> = {
   1: "#fef9c3",
   2: "#fde68a",
@@ -83,6 +144,13 @@ export default function Home() {
   const [showRelief, setShowRelief] = useState(true);
   const [selectedRelief, setSelectedRelief] = useState<ReliefCenter | null>(null);
   const reliefMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const [showMissing, setShowMissing] = useState(false);
+  const [missingForm, setMissingForm] = useState({ name: "", age: "", last_seen_location: "", description: "", contact_info: "" });
+  const [missingStatus, setMissingStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [missingPersons, setMissingPersons] = useState<MissingPerson[]>([]);
+  const missingMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [walkthroughStep, setWalkthroughStep] = useState(0);
   const clickedCoords = useRef<{ lat: number; lng: number } | null>(null);
 
   function sortReports(rows: Report[], order: SortOrder) {
@@ -118,6 +186,26 @@ export default function Home() {
     });
   }
 
+  function renderMissingMarkers(persons: MissingPerson[]) {
+    missingMarkersRef.current.forEach(m => m.remove());
+    missingMarkersRef.current = [];
+    if (!map.current) return;
+    persons.forEach((person) => {
+      if (!person.lat || !person.lng) return;
+      const el = document.createElement("div");
+      el.style.cssText = "width:28px;height:28px;background:#f97316;border:2px solid #fff;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.5)";
+      el.innerHTML = "🧍";
+      el.title = person.name;
+      const popup = new mapboxgl.Popup({ offset: 16, closeButton: false })
+        .setHTML(`<div style="color:#111;font-size:12px;max-width:200px"><strong>${person.name}</strong>${person.age ? `, ${person.age} años` : ""}<br/>${person.last_seen_location || ""}<br/><em style="color:#555">${person.contact_info || ""}</em></div>`);
+      new mapboxgl.Marker({ element: el })
+        .setLngLat([person.lng, person.lat])
+        .setPopup(popup)
+        .addTo(map.current!);
+      missingMarkersRef.current.push(new mapboxgl.Marker({ element: el }));
+    });
+  }
+
   function loadData() {
     const p = new URLSearchParams();
     if (source) p.set("source", source);
@@ -125,6 +213,10 @@ export default function Home() {
     fetch(`${API}/relief-centers`).then((r) => r.json()).then((centers: ReliefCenter[]) => {
       setReliefCenters(centers);
       renderReliefMarkers(centers);
+    }).catch(() => {});
+    fetch(`${API}/missing-persons`).then((r) => r.json()).then((persons: MissingPerson[]) => {
+      setMissingPersons(persons);
+      renderMissingMarkers(persons);
     }).catch(() => {});
     Promise.all([
       fetch(`${API}/reports/geojson?${p}`).then((r) => r.json()),
@@ -273,27 +365,31 @@ export default function Home() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-gray-950 text-white">
-      {casualties && (casualties.deaths != null || casualties.injured != null) && (
-        <div className="bg-red-950 border-b border-red-800 px-4 py-2 flex items-center gap-4 flex-wrap shrink-0">
-          <span className="text-red-300 font-bold text-sm uppercase tracking-wide">Cifras oficiales</span>
-          {casualties.deaths != null && (
-            <span className="text-white font-bold">{casualties.deaths} <span className="text-red-300 font-normal">muertos</span></span>
-          )}
-          {casualties.injured != null && (
-            <span className="text-white font-bold">{casualties.injured} <span className="text-red-300 font-normal">heridos</span></span>
-          )}
-          {casualties.missing != null && (
-            <span className="text-white font-bold">{casualties.missing} <span className="text-red-300 font-normal">desaparecidos</span></span>
-          )}
-          <span className="text-red-400 text-xs ml-auto">
-            {casualties.source_url
-              ? <a href={casualties.source_url} target="_blank" rel="noopener noreferrer" className="underline hover:text-red-200">{casualties.source_name}</a>
-              : casualties.source_name
-            }
-            {" · "}{timeAgo(casualties.scraped_at)}
-          </span>
-        </div>
-      )}
+      {/* USGS red alert projection — always visible */}
+      <div className="bg-amber-950 border-b border-amber-800 px-4 py-1.5 flex items-center gap-3 flex-wrap shrink-0">
+        <span className="text-amber-400 font-bold text-xs uppercase tracking-wide">⚠️ USGS Alerta Roja</span>
+        <span className="text-amber-100 text-xs">Proyección de fatalidades: <strong>10,000 – 100,000</strong> víctimas estimadas</span>
+        <a href="https://earthquake.usgs.gov/earthquakes/eventpage/us7000pjf8/pager" target="_blank" rel="noopener noreferrer"
+          className="text-amber-500 text-xs hover:text-amber-300 ml-auto">Ver USGS PAGER →</a>
+      </div>
+
+      {/* Confirmed casualties */}
+      <div className="bg-red-950 border-b border-red-800 px-4 py-2 flex items-center gap-4 flex-wrap shrink-0">
+        <span className="text-red-300 font-bold text-sm uppercase tracking-wide">Víctimas confirmadas</span>
+        <span className="text-white font-bold">
+          {casualties?.deaths ?? 0} <span className="text-red-300 font-normal">muertos</span>
+        </span>
+        {casualties?.injured != null && (
+          <span className="text-white font-bold">{casualties.injured} <span className="text-red-300 font-normal">heridos</span></span>
+        )}
+        {casualties?.missing != null && (
+          <span className="text-white font-bold">{casualties.missing} <span className="text-red-300 font-normal">desaparecidos</span></span>
+        )}
+        <span className="text-red-500 text-xs ml-auto italic">
+          {casualties?.source_name ?? "Cifra oficial pendiente de actualización"}
+          {casualties?.scraped_at ? ` · ${timeAgo(casualties.scraped_at)}` : ""}
+        </span>
+      </div>
       <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 shrink-0 flex-wrap gap-2">
         <div>
           <h1 className="font-bold text-red-400 text-lg leading-tight">🇻🇪 Venezuela Earthquake Map</h1>
@@ -336,9 +432,20 @@ export default function Home() {
             📦 Acopios
           </button>
 
+          <button onClick={() => { setShowMissing(true); setMissingStatus("idle"); }}
+            className="px-2 py-0.5 rounded text-xs bg-orange-800 hover:bg-orange-700 text-white font-medium">
+            🧍 Desaparecidos
+          </button>
+
           <button onClick={() => { setShowSubmit(true); setSubmitStatus("idle"); }}
             className="px-3 py-0.5 rounded text-xs bg-red-700 hover:bg-red-600 text-white font-semibold">
             + Reportar daño
+          </button>
+
+          <button onClick={() => { setShowWalkthrough(true); setWalkthroughStep(0); }}
+            className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-bold flex items-center justify-center"
+            title="¿Cómo usar el mapa?">
+            ?
           </button>
         </div>
       </div>
@@ -468,6 +575,10 @@ export default function Home() {
             <div className="w-3 h-3 rounded-full bg-green-500" />
             <span className="text-gray-400">Centro de acopio</span>
           </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-orange-500" />
+            <span className="text-gray-400">Desaparecido</span>
+          </div>
         </div>
       </div>
 
@@ -492,6 +603,128 @@ export default function Home() {
               <a href={selectedRelief.source_url} target="_blank" rel="noopener noreferrer"
                 className="text-xs text-green-400 hover:text-green-300">Ver fuente →</a>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Missing persons modal */}
+      {showMissing && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-orange-700 rounded-xl w-full max-w-md p-6 flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="font-bold text-white text-lg">🧍 Persona desaparecida</h2>
+                <p className="text-gray-400 text-xs mt-0.5">Reporta a alguien que no has podido contactar desde el terremoto.</p>
+              </div>
+              <button onClick={() => setShowMissing(false)} className="text-gray-500 hover:text-white text-2xl leading-none ml-2">×</button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Nombre completo *</label>
+                <input value={missingForm.name} onChange={e => setMissingForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Ej: María González"
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-gray-400 text-xs mb-1 block">Edad (opcional)</label>
+                  <input value={missingForm.age} onChange={e => setMissingForm(f => ({ ...f, age: e.target.value }))}
+                    type="number" placeholder="35"
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-gray-400 text-xs mb-1 block">Última ubicación conocida</label>
+                  <input value={missingForm.last_seen_location} onChange={e => setMissingForm(f => ({ ...f, last_seen_location: e.target.value }))}
+                    placeholder="Ej: Yumare, Yaracuy"
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
+                </div>
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Descripción (señas, ropa, contexto)</label>
+                <textarea value={missingForm.description} onChange={e => setMissingForm(f => ({ ...f, description: e.target.value }))}
+                  rows={3} placeholder="Estaba en casa cuando ocurrió el sismo. No ha respondido desde las 10am."
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 resize-none" />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Contacto para información</label>
+                <input value={missingForm.contact_info} onChange={e => setMissingForm(f => ({ ...f, contact_info: e.target.value }))}
+                  placeholder="Teléfono, Instagram, o email"
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
+              </div>
+            </div>
+
+            <button
+              disabled={!missingForm.name || missingStatus === "sending"}
+              onClick={async () => {
+                setMissingStatus("sending");
+                const [lat, lng] = resolveCoords(missingForm.last_seen_location);
+                try {
+                  const res = await fetch(`${API}/missing-persons`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ...missingForm, age: missingForm.age ? parseInt(missingForm.age) : null, lat, lng }),
+                  });
+                  if (res.ok) {
+                    setMissingStatus("done");
+                    setMissingForm({ name: "", age: "", last_seen_location: "", description: "", contact_info: "" });
+                    setTimeout(() => setShowMissing(false), 2000);
+                    fetch(`${API}/missing-persons`).then(r => r.json()).then((persons: MissingPerson[]) => {
+                      setMissingPersons(persons);
+                      renderMissingMarkers(persons);
+                    }).catch(() => {});
+                  } else {
+                    setMissingStatus("error");
+                  }
+                } catch { setMissingStatus("error"); }
+              }}
+              className="w-full py-2 rounded bg-orange-700 hover:bg-orange-600 disabled:opacity-40 text-white font-semibold text-sm transition-colors">
+              {missingStatus === "sending" ? "Enviando..." : missingStatus === "done" ? "¡Reporte enviado!" : missingStatus === "error" ? "Error — intenta de nuevo" : "Reportar desaparecido"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Walkthrough modal */}
+      {showWalkthrough && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm p-6 flex flex-col gap-5">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500 text-xs">{walkthroughStep + 1} / {WALKTHROUGH_STEPS.length}</span>
+              <button onClick={() => setShowWalkthrough(false)} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="text-5xl">{WALKTHROUGH_STEPS[walkthroughStep].icon}</div>
+              <h3 className="text-white font-bold text-lg">{WALKTHROUGH_STEPS[walkthroughStep].title}</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">{WALKTHROUGH_STEPS[walkthroughStep].desc}</p>
+            </div>
+
+            <div className="flex justify-center gap-1.5">
+              {WALKTHROUGH_STEPS.map((_, i) => (
+                <div key={i} className={`h-1.5 rounded-full transition-all ${i === walkthroughStep ? "w-6 bg-red-500" : "w-1.5 bg-gray-700"}`} />
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              {walkthroughStep > 0 && (
+                <button onClick={() => setWalkthroughStep(s => s - 1)}
+                  className="flex-1 py-2 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium">
+                  ← Anterior
+                </button>
+              )}
+              {walkthroughStep < WALKTHROUGH_STEPS.length - 1 ? (
+                <button onClick={() => setWalkthroughStep(s => s + 1)}
+                  className="flex-1 py-2 rounded bg-red-600 hover:bg-red-500 text-white text-sm font-semibold">
+                  Siguiente →
+                </button>
+              ) : (
+                <button onClick={() => setShowWalkthrough(false)}
+                  className="flex-1 py-2 rounded bg-red-600 hover:bg-red-500 text-white text-sm font-semibold">
+                  Entendido ✓
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -547,17 +780,7 @@ export default function Home() {
               disabled={!submitForm.url || submitStatus === "sending"}
               onClick={async () => {
                 setSubmitStatus("sending");
-                const LOCATIONS_MAP: Record<string, [number, number]> = {
-                  "caracas": [10.4806, -66.9036], "valencia": [10.162, -67.9903],
-                  "maracaibo": [10.6316, -71.6428], "barquisimeto": [10.0647, -69.3571],
-                  "maracay": [10.2469, -67.5958], "yumare": [10.6383, -68.6847],
-                  "san felipe": [10.3394, -68.7453], "la guaira": [10.6013, -66.9337],
-                  "cumana": [10.4574, -64.1744], "merida": [8.5916, -71.144],
-                  "carabobo": [10.162, -67.9903], "miranda": [10.3, -66.6],
-                };
-                const locKey = submitForm.location.toLowerCase().trim();
-                const match = Object.entries(LOCATIONS_MAP).find(([k]) => locKey.includes(k) || k.includes(locKey));
-                const [lat, lng] = match ? match[1] : [null, null];
+                const [lat, lng] = resolveCoords(submitForm.location);
                 const payload = {
                   source: "web",
                   source_url: submitForm.url,
