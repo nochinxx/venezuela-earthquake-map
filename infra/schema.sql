@@ -95,6 +95,39 @@ CREATE TABLE IF NOT EXISTS building_damage (
 CREATE INDEX IF NOT EXISTS building_damage_source_idx   ON building_damage(external_source);
 CREATE INDEX IF NOT EXISTS building_damage_location_idx ON building_damage(lat, lng);
 
+-- Active aid requests / volunteer coordination (scraped from venezuela-ayuda.com + public submissions)
+CREATE TABLE IF NOT EXISTS needs_requests (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title           text NOT NULL,
+  description     text,
+  category        text DEFAULT 'otro',  -- rescate, voluntarios, materiales, herramientas, alimentos, electricidad, medicamentos, otro
+  priority        text DEFAULT 'urgente', -- critico, urgente, importante
+  lat             double precision,
+  lng             double precision,
+  location_name   text,
+  contact_info    text,
+  items_needed    text,
+  source_url      text,
+  external_id     text,
+  external_source text,
+  submitted_by    text,
+  created_at      timestamptz DEFAULT now(),
+  expires_at      timestamptz,
+  is_active       boolean DEFAULT true,
+  UNIQUE(external_source, external_id)
+);
+
+CREATE INDEX IF NOT EXISTS needs_location_idx ON needs_requests(lat, lng);
+CREATE INDEX IF NOT EXISTS needs_active_idx   ON needs_requests(is_active, expires_at);
+
+ALTER TABLE needs_requests ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "public_read_needs" ON needs_requests
+  FOR SELECT USING (true);
+
+CREATE POLICY "service_role_write_needs" ON needs_requests
+  FOR ALL USING (auth.role() = 'service_role');
+
 ALTER TABLE building_damage ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "public_read_buildings" ON building_damage

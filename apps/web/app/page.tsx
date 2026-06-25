@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
@@ -320,7 +320,7 @@ export default function Home() {
   const [externalMissingTotal, setExternalMissingTotal] = useState<number | null>(null);
   const [externalMissingLoading, setExternalMissingLoading] = useState(false);
   const [selectedExternalPerson, setSelectedExternalPerson] = useState<Record<string, unknown> | null>(null);
-  const [panelTab, setPanelTab] = useState<"reports" | "personas" | "edificios" | null>(null);
+  const [panelTab, setPanelTab] = useState<"reports" | "personas" | "edificios" | "solicitudes" | null>(null);
   const [buildingSearch, setBuildingSearch] = useState("");
   const [buildingList, setBuildingList] = useState<Record<string, unknown>[]>([]);
   const buildingFeaturesRef = useRef<GeoJSON.Feature[]>([]);
@@ -340,6 +340,13 @@ export default function Home() {
   const [showYummyCard, setShowYummyCard] = useState(true);
   const [showReports, setShowReports] = useState(true);
   const [showBuildings, setShowBuildings] = useState(true);
+  const [showNeeds, setShowNeeds] = useState(true);
+  const [needsList, setNeedsList] = useState<Record<string, unknown>[]>([]);
+  const [needsCount, setNeedsCount] = useState<number | null>(null);
+  const [needsSearch, setNeedsSearch] = useState("");
+  const [showNeedsForm, setShowNeedsForm] = useState(false);
+  const [needsFormStatus, setNeedsFormStatus] = useState<"idle"|"sending"|"ok"|"err">("idle");
+  const needsMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [buildingCount, setBuildingCount] = useState<number | null>(null);
   const [foundCount, setFoundCount] = useState<number | null>(null);
   const [missingTotal, setMissingTotal] = useState<number | null>(null);
@@ -358,6 +365,13 @@ export default function Home() {
     fetch(`${API}/missing-persons?count=1&status=encontrado`)
       .then(r => r.json())
       .then((res: { total: number }) => setFoundCount(res.total ?? null))
+      .catch(() => {});
+    fetch(`${API}/needs?limit=200`)
+      .then(r => r.json())
+      .then((res: { data: Record<string, unknown>[]; total: number }) => {
+        setNeedsList(res.data ?? []);
+        setNeedsCount(res.total ?? 0);
+      })
       .catch(() => {});
   }, []);
   const clickedCoords = useRef<{ lat: number; lng: number } | null>(null);
@@ -396,6 +410,40 @@ export default function Home() {
     });
   }
 
+  const CATEGORY_EMOJI: Record<string, string> = {
+    rescate: "🚨", voluntarios: "🤝", materiales: "🏗", herramientas: "🔧",
+    alimentos: "🍞", electricidad: "⚡", medicamentos: "💊", otro: "📋",
+  };
+
+  function renderNeedsMarkers(needs: Record<string, unknown>[]) {
+    needsMarkersRef.current.forEach(m => m.remove());
+    needsMarkersRef.current = [];
+    if (!map.current) return;
+    needs.forEach((n) => {
+      const lat = n.lat as number | null;
+      const lng = n.lng as number | null;
+      if (!lat || !lng) return;
+      const cat = String(n.category ?? "otro");
+      const emoji = CATEGORY_EMOJI[cat] ?? "📋";
+      const priority = String(n.priority ?? "urgente");
+      const bg = priority === "critico" ? "#ef4444" : priority === "urgente" ? "#f97316" : "#eab308";
+      const el = document.createElement("div");
+      el.style.cssText = `width:26px;height:26px;background:${bg};border:2px solid #fff;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 6px rgba(0,0,0,0.5);transform:rotate(45deg)`;
+      const inner = document.createElement("div");
+      inner.style.cssText = "transform:rotate(-45deg)";
+      inner.textContent = emoji;
+      el.appendChild(inner);
+      el.title = String(n.title ?? "Solicitud");
+      el.onclick = () => {
+        setPanelTab("solicitudes");
+      };
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([lng, lat])
+        .addTo(map.current!);
+      needsMarkersRef.current.push(marker);
+    });
+  }
+
   function loadData() {
     const p = new URLSearchParams();
     if (source) p.set("source", source);
@@ -404,6 +452,14 @@ export default function Home() {
       setReliefCenters(centers);
       renderReliefMarkers(centers);
     }).catch(() => {});
+    fetch(`${API}/needs?limit=200`)
+      .then(r => r.json())
+      .then((res: { data: Record<string, unknown>[]; total: number }) => {
+        const items = res.data ?? [];
+        setNeedsList(items);
+        setNeedsCount(res.total ?? items.length);
+        renderNeedsMarkers(items);
+      }).catch(() => {});
     fetch(`${API}/building-damage`).then((r) => r.json()).then((geojson) => {
       if (!geojson?.features) return;
       setBuildingCount(geojson.features.length);
@@ -433,6 +489,8 @@ export default function Home() {
       const DAMAGE_LABEL: Record<string, string> = { total: "🔴 Derrumbe total", severo: "🟠 Daño severo", parcial: "🟡 Daño parcial" };
       const SOURCE_URL: Record<string, string> = { "terremotovenezuela.com": "https://terremotovenezuela.com" };
       m.on("click", LAYER, (e) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (e as any).stopPropagation();
         const feat = e.features?.[0];
         if (!feat) return;
         const p = feat.properties as Record<string, unknown>;
@@ -614,6 +672,13 @@ export default function Home() {
       el.style.display = showRelief ? "flex" : "none";
     });
   }, [showRelief]);
+
+  useEffect(() => {
+    needsMarkersRef.current.forEach(m => {
+      const el = m.getElement();
+      el.style.display = showNeeds ? "flex" : "none";
+    });
+  }, [showNeeds]);
 
 
   // External missing persons (desaparecidosterremotovenezuela.com)
@@ -936,6 +1001,14 @@ export default function Home() {
               <span className="text-amber-400 text-[10px] hover:text-white underline decoration-dotted" onClick={(e) => { e.stopPropagation(); setShowSources(true); }}>↗</span>
             )}
           </button>
+
+          {/* Solicitudes */}
+          <button
+            onClick={() => { if (!showNeeds) { setShowNeeds(true); setPanelTab("solicitudes"); } else { setPanelTab("solicitudes"); } }}
+            className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors flex items-center gap-1 ${showNeeds ? "bg-orange-800 text-orange-100" : "bg-gray-800 text-gray-500 hover:bg-gray-700"}`}>
+            🆘 Solicitudes
+            {showNeeds && needsCount != null && needsCount > 0 && <span className="text-orange-300 text-[10px]">· {needsCount}</span>}
+          </button>
         </div>
       </div>
 
@@ -960,6 +1033,10 @@ export default function Home() {
               <button onClick={() => setPanelTab("edificios")}
                 className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 ${panelTab === "edificios" ? "text-amber-400 border-amber-500" : "text-gray-500 border-transparent hover:text-gray-300"}`}>
                 🏚 Edificios{buildingCount != null ? ` (${buildingCount})` : ""}
+              </button>
+              <button onClick={() => setPanelTab("solicitudes")}
+                className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 ${panelTab === "solicitudes" ? "text-orange-400 border-orange-500" : "text-gray-500 border-transparent hover:text-gray-300"}`}>
+                🆘 Ayuda{needsCount != null && needsCount > 0 ? ` (${needsCount})` : ""}
               </button>
               <button onClick={() => { setPanelTab(null); setSelected([]); setSelectedLocation(null); setSelectedExternalPerson(null); }}
                 className="px-3 text-gray-500 hover:text-white text-lg leading-none shrink-0">×</button>
@@ -1107,14 +1184,22 @@ export default function Home() {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="font-semibold text-white text-sm truncate">{p.name}</p>
                           {p.age ? <span className="text-gray-500 text-xs shrink-0">{p.age} años</span> : null}
-                          <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${p.status === "encontrado" ? "bg-green-900 text-green-300" : "bg-orange-900/50 text-orange-400"}`}>
-                            {p.status === "encontrado" ? "✓ Encontrado" : "Sin contacto"}
+                          <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${(p.status === "encontrado" || p.status === "localizado") ? "bg-green-900 text-green-300" : "bg-orange-900/50 text-orange-400"}`}>
+                            {(p.status === "encontrado" || p.status === "localizado") ? "✓ Localizado" : "Sin contacto"}
                           </span>
                         </div>
                         {p.last_seen_location ? <p className="text-gray-400 text-xs truncate">📍 {p.last_seen_location}</p> : null}
                         {p.contact_info ? <p className="text-gray-500 text-xs truncate">☎ {p.contact_info}</p> : null}
+                        {p.external_source && String(p.external_source).includes("@mariojllesca") && (
+                          <p className="text-[10px] text-cyan-400 font-medium">🔍 Cruce de datos por @mariojllesca</p>
+                        )}
                         <div className="flex items-center gap-2 mt-0.5">
-                          {p.external_source && (
+                          {p.source2_url && String(p.external_source || "").includes("@mariojllesca") && (
+                            <a href={String(p.source2_url)} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-500 hover:text-cyan-300">
+                              ver fuente →
+                            </a>
+                          )}
+                          {p.external_source && !String(p.external_source).includes("@mariojllesca") && (
                             <a href={p.source2_url || (p.external_source === "desaparecidos-vzla" ? "https://desaparecidosterremotovenezuela.com" : "https://venezuelatebusca.com")}
                               target="_blank" rel="noopener noreferrer" className="text-xs text-violet-400 hover:text-violet-300">
                               {p.external_source === "venezulatebusca" ? "venezulatebusca.com" : "desaparecidos.com"} →
@@ -1182,7 +1267,7 @@ export default function Home() {
                       return (
                         <div key={i} className="px-4 py-3 hover:bg-gray-800/50 cursor-pointer"
                           onClick={() => {
-                            if (coords) { map.current?.flyTo({ center: coords, zoom: 16, duration: 800 }); setPanelTab(null); }
+                            if (coords) { map.current?.flyTo({ center: coords, zoom: 16, duration: 800 }); }
                           }}>
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-white text-sm font-medium leading-snug">{String(b.place ?? "Edificio afectado")}</p>
@@ -1198,6 +1283,64 @@ export default function Home() {
                   <p className="text-gray-600 text-xs text-center">
                     <a href="https://terremotovenezuela.com" className="text-amber-500 hover:text-amber-300" target="_blank" rel="noopener noreferrer">terremotovenezuela.com</a>
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* Solicitudes tab */}
+            {panelTab === "solicitudes" && (
+              <div className="flex flex-col flex-1 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-800 shrink-0 space-y-2">
+                  <div className="flex gap-2 items-center">
+                    <input
+                      value={needsSearch}
+                      onChange={e => setNeedsSearch(e.target.value)}
+                      placeholder="Buscar solicitud o lugar..."
+                      className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                    />
+                    <button onClick={() => setShowNeedsForm(true)}
+                      className="px-3 py-1.5 bg-orange-700 hover:bg-orange-600 text-white text-xs font-semibold rounded shrink-0">
+                      + Publicar
+                    </button>
+                  </div>
+                  <p className="text-gray-600 text-xs">Solicitudes activas · expiran en 6h · <a href="https://venezuela-ayuda.com/solicitudes" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">venezuela-ayuda.com ↗</a></p>
+                </div>
+                <div className="flex-1 overflow-y-auto divide-y divide-gray-800/50">
+                  {needsList.length === 0 && (
+                    <div className="p-6 text-center text-gray-600 text-sm">Sin solicitudes activas</div>
+                  )}
+                  {needsList
+                    .filter(n => {
+                      const q = needsSearch.toLowerCase();
+                      if (!q) return true;
+                      return String(n.title ?? "").toLowerCase().includes(q) || String(n.location_name ?? "").toLowerCase().includes(q) || String(n.description ?? "").toLowerCase().includes(q);
+                    })
+                    .map((n, i) => {
+                      const cat = String(n.category ?? "otro");
+                      const emoji = CATEGORY_EMOJI[cat] ?? "📋";
+                      const priority = String(n.priority ?? "urgente");
+                      const priorityColor = priority === "critico" ? "text-red-400" : priority === "urgente" ? "text-orange-400" : "text-yellow-400";
+                      const coords = n.lat && n.lng ? [n.lng as number, n.lat as number] as [number, number] : null;
+                      const expiresAt = n.expires_at ? new Date(n.expires_at as string) : null;
+                      const hoursLeft = expiresAt ? Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 3600000)) : null;
+                      return (
+                        <div key={i} className="px-4 py-3 hover:bg-gray-800/50 cursor-pointer"
+                          onClick={() => { if (coords) map.current?.flyTo({ center: coords, zoom: 15, duration: 800 }); }}>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-white text-sm font-medium leading-snug">{emoji} {String(n.title ?? "Solicitud")}</p>
+                            <span className={`text-xs shrink-0 font-semibold ${priorityColor}`}>{priority}</span>
+                          </div>
+                          {n.location_name != null && <p className="text-gray-400 text-xs mt-0.5">📍 {String(n.location_name)}</p>}
+                          {n.description != null && <p className="text-gray-500 text-xs mt-0.5 line-clamp-2">{String(n.description)}</p>}
+                          {n.contact_info != null && <p className="text-orange-400 text-xs mt-0.5">📞 {String(n.contact_info)}</p>}
+                          <div className="flex items-center gap-2 mt-1">
+                            {coords && <span className="text-orange-500 text-xs">ver en mapa →</span>}
+                            {hoursLeft !== null && <span className="text-gray-600 text-xs">· expira en {hoursLeft}h</span>}
+                            {n.source_url != null && <a href={String(n.source_url)} target="_blank" rel="noopener noreferrer" className="text-blue-500 text-xs hover:underline ml-auto" onClick={e => e.stopPropagation()}>fuente ↗</a>}
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -1218,6 +1361,10 @@ export default function Home() {
               <button onClick={() => setPanelTab("edificios")}
                 className={`flex-1 py-2.5 text-xs font-semibold border-b-2 ${panelTab === "edificios" ? "text-amber-400 border-amber-500" : "text-gray-500 border-transparent"}`}>
                 🏚 Edificios
+              </button>
+              <button onClick={() => setPanelTab("solicitudes")}
+                className={`flex-1 py-2.5 text-xs font-semibold border-b-2 ${panelTab === "solicitudes" ? "text-orange-400 border-orange-500" : "text-gray-500 border-transparent"}`}>
+                🆘 Ayuda
               </button>
               <button onClick={() => { setPanelTab(null); setSelected([]); setSelectedLocation(null); setSelectedExternalPerson(null); }}
                 className="px-3 text-gray-500 text-lg leading-none shrink-0">×</button>
@@ -1332,9 +1479,12 @@ export default function Home() {
                           {p.age ? <span className="text-gray-500 text-xs">{p.age}a</span> : null}
                         </div>
                         {p.last_seen_location ? <p className="text-gray-400 text-xs truncate">📍 {p.last_seen_location}</p> : null}
-                        <span className={`text-xs px-1 py-0.5 rounded w-fit ${p.status === "encontrado" ? "bg-green-900 text-green-300" : "bg-orange-900/50 text-orange-400"}`}>
-                          {p.status === "encontrado" ? "✓" : "Sin contacto"}
+                        <span className={`text-xs px-1 py-0.5 rounded w-fit ${(p.status === "encontrado" || p.status === "localizado") ? "bg-green-900 text-green-300" : "bg-orange-900/50 text-orange-400"}`}>
+                          {(p.status === "encontrado" || p.status === "localizado") ? "✓ Localizado" : "Sin contacto"}
                         </span>
+                        {p.external_source && String(p.external_source).includes("@mariojllesca") && (
+                          <p className="text-[10px] text-cyan-400">🔍 Cruce @mariojllesca</p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1373,12 +1523,61 @@ export default function Home() {
                       const coords = b._coords as [number, number] | undefined;
                       return (
                         <div key={i} className="px-3 py-2.5 hover:bg-gray-800/50 cursor-pointer"
-                          onClick={() => { if (coords) { map.current?.flyTo({ center: coords, zoom: 16, duration: 800 }); setPanelTab(null); } }}>
+                          onClick={() => { if (coords) { map.current?.flyTo({ center: coords, zoom: 16, duration: 800 }); } }}>
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-white text-sm font-medium leading-snug">{String(b.place ?? "Edificio afectado")}</p>
                             {b.damage_type != null && <span className="text-xs shrink-0">{DAMAGE_LABEL[String(b.damage_type)] ?? String(b.damage_type)}</span>}
                           </div>
                           {b.needs != null && <p className="text-gray-400 text-xs mt-0.5 line-clamp-2">{String(b.needs)}</p>}
+                        </div>
+                      );
+                    })}
+                </div>
+              </>
+            )}
+
+            {/* Solicitudes tab – mobile */}
+            {panelTab === "solicitudes" && (
+              <>
+                <div className="px-3 py-2 border-b border-gray-800 shrink-0 space-y-1.5">
+                  <div className="flex gap-2">
+                    <input
+                      value={needsSearch}
+                      onChange={e => setNeedsSearch(e.target.value)}
+                      placeholder="Buscar solicitud..."
+                      className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                    />
+                    <button onClick={() => setShowNeedsForm(true)}
+                      className="px-2.5 py-1.5 bg-orange-700 text-white text-xs font-semibold rounded shrink-0">
+                      + Publicar
+                    </button>
+                  </div>
+                  <p className="text-gray-600 text-[10px]">Expiran en 6h · <a href="https://venezuela-ayuda.com/solicitudes" target="_blank" rel="noopener noreferrer" className="text-orange-400">venezuela-ayuda.com ↗</a></p>
+                </div>
+                <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
+                  {needsList.length === 0 && <div className="p-4 text-center text-gray-600 text-sm">Sin solicitudes activas</div>}
+                  {needsList
+                    .filter(n => {
+                      const q = needsSearch.toLowerCase();
+                      if (!q) return true;
+                      return String(n.title ?? "").toLowerCase().includes(q) || String(n.location_name ?? "").toLowerCase().includes(q);
+                    })
+                    .map((n, i) => {
+                      const cat = String(n.category ?? "otro");
+                      const emoji = CATEGORY_EMOJI[cat] ?? "📋";
+                      const priority = String(n.priority ?? "urgente");
+                      const priorityColor = priority === "critico" ? "text-red-400" : priority === "urgente" ? "text-orange-400" : "text-yellow-400";
+                      const coords = n.lat && n.lng ? [n.lng as number, n.lat as number] as [number, number] : null;
+                      return (
+                        <div key={i} className="px-3 py-2.5 hover:bg-gray-800/50 cursor-pointer"
+                          onClick={() => { if (coords) map.current?.flyTo({ center: coords, zoom: 15, duration: 800 }); }}>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-white text-sm font-medium leading-snug">{emoji} {String(n.title ?? "Solicitud")}</p>
+                            <span className={`text-xs shrink-0 ${priorityColor}`}>{priority}</span>
+                          </div>
+                          {n.location_name != null && <p className="text-gray-400 text-xs">📍 {String(n.location_name)}</p>}
+                          {n.contact_info != null && <p className="text-orange-400 text-xs">📞 {String(n.contact_info)}</p>}
+                          {coords && <p className="text-orange-500 text-xs">ver en mapa →</p>}
                         </div>
                       );
                     })}
@@ -1949,6 +2148,104 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Needs submission form */}
+      {showNeedsForm && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md p-6 flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h2 className="font-bold text-white text-lg">Publicar solicitud</h2>
+              <button onClick={() => { setShowNeedsForm(false); setNeedsFormStatus("idle"); }} className="text-gray-500 hover:text-white text-2xl leading-none">×</button>
+            </div>
+            <p className="text-gray-400 text-xs">¿Necesitan ayuda? Publícalo aquí. La solicitud expira en 6 horas para mantener la información actualizada.</p>
+            <NeedsForm
+              onSubmit={async (payload) => {
+                setNeedsFormStatus("sending");
+                try {
+                  const res = await fetch(`${API}/needs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                  if (res.ok) {
+                    setNeedsFormStatus("ok");
+                    const newItem = { ...payload, id: Date.now().toString(), created_at: new Date().toISOString() };
+                    setNeedsList(l => [newItem, ...l]);
+                    setNeedsCount(c => (c ?? 0) + 1);
+                    setTimeout(() => { setShowNeedsForm(false); setNeedsFormStatus("idle"); }, 2000);
+                  } else {
+                    setNeedsFormStatus("err");
+                  }
+                } catch { setNeedsFormStatus("err"); }
+              }}
+              status={needsFormStatus}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NeedsForm({ onSubmit, status }: { onSubmit: (p: Record<string, unknown>) => void; status: string }) {
+  const [title, setTitle] = React.useState("");
+  const [category, setCategory] = React.useState("otro");
+  const [location, setLocation] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  const [contact, setContact] = React.useState("");
+  const [items, setItems] = React.useState("");
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <label className="text-gray-400 text-xs mb-1 block">¿Qué necesitan? *</label>
+        <input value={title} onChange={e => setTitle(e.target.value)} maxLength={200}
+          placeholder="Ej: Residencias Orca necesita equipo de rescate"
+          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-gray-400 text-xs mb-1 block">Categoría</label>
+          <select value={category} onChange={e => setCategory(e.target.value)}
+            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500">
+            <option value="rescate">🚨 Rescate</option>
+            <option value="voluntarios">🤝 Voluntarios</option>
+            <option value="materiales">🏗 Materiales</option>
+            <option value="herramientas">🔧 Herramientas</option>
+            <option value="alimentos">🍞 Alimentos</option>
+            <option value="electricidad">⚡ Electricidad</option>
+            <option value="medicamentos">💊 Medicamentos</option>
+            <option value="otro">📋 Otro</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-gray-400 text-xs mb-1 block">Lugar</label>
+          <input value={location} onChange={e => setLocation(e.target.value)}
+            placeholder="Ej: Caraballeda"
+            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
+        </div>
+      </div>
+      <div>
+        <label className="text-gray-400 text-xs mb-1 block">Descripción</label>
+        <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} maxLength={500}
+          placeholder="Detalles de la situación..."
+          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 resize-none" />
+      </div>
+      <div>
+        <label className="text-gray-400 text-xs mb-1 block">Contacto</label>
+        <input value={contact} onChange={e => setContact(e.target.value)}
+          placeholder="Teléfono o usuario de contacto"
+          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
+      </div>
+      <div>
+        <label className="text-gray-400 text-xs mb-1 block">Items necesarios (opcional)</label>
+        <input value={items} onChange={e => setItems(e.target.value)}
+          placeholder="Ej: gato hidráulico, escalera, máscaras"
+          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
+      </div>
+      <button
+        disabled={!title.trim() || status === "sending"}
+        onClick={() => onSubmit({ title, category, location_name: location || null, description: description || null, contact_info: contact || null, items_needed: items || null })}
+        className="w-full py-2 rounded bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white font-semibold text-sm transition-colors">
+        {status === "sending" ? "Publicando..." : status === "ok" ? "¡Publicado! Expira en 6h" : status === "err" ? "Error — intenta de nuevo" : "Publicar solicitud"}
+      </button>
+      <p className="text-gray-600 text-[10px] text-center">Esta solicitud expirará automáticamente en 6 horas</p>
     </div>
   );
 }
