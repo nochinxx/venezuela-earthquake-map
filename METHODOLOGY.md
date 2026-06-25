@@ -39,7 +39,7 @@ Ambas plataformas reciben reportes del público. Los datos se sincronizan autom�
 Muchas personas aparecen en ambas plataformas. Usamos dos métodos para identificar duplicados:
 
 1. **Coincidencia de teléfono** — si dos registros comparten número de contacto, se marcan como el mismo caso.
-2. **Similitud de nombre (Gemma 3 4b)** — un modelo de lenguaje local compara pares de nombres con grafía similar para determinar si son la misma persona. Funciona con variaciones de acentos, errores tipográficos y nombres abreviados.
+2. **Similitud de nombre (Gemma 4)** — un modelo de lenguaje local compara pares de nombres con grafía similar para determinar si son la misma persona. Funciona con variaciones de acentos, errores tipográficos y nombres abreviados.
 
 Los duplicados se excluyen del conteo y del mapa, pero se conservan en la base de datos. **El proceso automático puede cometer errores** — si detectas un caso mal clasificado, puedes reportarlo en GitHub.
 

@@ -1676,7 +1676,7 @@ export default function Home() {
                   </div>
                   <div>
                     <span className="text-white font-medium">🔁 ¿Cómo evitan los duplicados?</span><br/>
-                    Los 20K registros crudos de 2 plataformas se cruzan por número de teléfono y similitud de nombre (modelo local Gemma 3). Los duplicados se excluyen — quedan ~11.5K registros únicos. El proceso tiene un margen de error estimado del 2–5%.
+                    Los 20K registros crudos de 2 plataformas se cruzan por número de teléfono y similitud de nombre (modelo local Gemma 4). Los duplicados se excluyen — quedan ~11.5K registros únicos. El proceso tiene un margen de error estimado del 2–5%.
                   </div>
                   <div>
                     <span className="text-white font-medium">📍 ¿Los puntos son exactos?</span><br/>
