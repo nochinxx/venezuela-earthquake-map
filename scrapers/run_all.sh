@@ -2,6 +2,8 @@
 # Run all earthquake scrapers. Called by launchd every 10 minutes.
 set -e
 
+export PATH="/opt/homebrew/bin:/opt/homebrew/Caskroom/miniforge/base/bin:/usr/local/bin:/usr/bin:/bin"
+
 REPO=~/code/venezuela-earthquake-map
 LOG=~/agent/logs/earthquake-scraper.log
 CONDA="conda run -n agent python"

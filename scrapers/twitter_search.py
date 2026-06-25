@@ -123,7 +123,12 @@ def search_x(page, query: str) -> list[dict]:
     encoded = urllib.parse.quote(query)
     url = f"https://x.com/search?q={encoded}&f=live"
     page.goto(url, timeout=30000)
-    page.wait_for_load_state("networkidle", timeout=15000)
+    # X never reaches networkidle — wait for first tweet or timeout
+    try:
+        page.wait_for_selector("article[data-testid='tweet']", timeout=12000)
+    except Exception:
+        pass
+    time.sleep(2)
     # Scroll to load more tweets
     for _ in range(3):
         page.keyboard.press("End")

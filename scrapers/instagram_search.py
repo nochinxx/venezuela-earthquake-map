@@ -51,14 +51,24 @@ LOCATIONS = {
 CUTOFF = "2026-06-24"
 
 EXTRACT_JS = """() => {
-    // Instagram hashtag page: posts are in <article> tags
-    const posts = [...document.querySelectorAll("article a[href*='/p/']")];
-    return posts.map(a => ({
-        shortcode: (a.href.match(/\\/p\\/([^/]+)/) || [])[1] || "",
-        url: a.href,
-        img: (a.querySelector("img") || {}).src || "",
-        alt: (a.querySelector("img") || {}).alt || "",
-    })).filter(p => p.shortcode);
+    // Search/hashtag page: grab all /p/ links, deduplicate by shortcode
+    const seen = new Set();
+    const posts = [];
+    for (const a of document.querySelectorAll("a[href*='/p/']")) {
+        const m = a.href.match(/\\/p\\/([^/?]+)/);
+        if (!m) continue;
+        const code = m[1];
+        if (seen.has(code)) continue;
+        seen.add(code);
+        const img = a.querySelector("img");
+        posts.push({
+            shortcode: code,
+            url: "https://www.instagram.com/p/" + code + "/",
+            img: img ? img.src : "",
+            alt: img ? img.alt : "",
+        });
+    }
+    return posts;
 }"""
 
 POST_EXTRACT_JS = """() => {
@@ -121,17 +131,38 @@ def push(url, author, caption, img, date_str) -> bool:
 def login(page):
     print("  Logging into Instagram...")
     page.goto("https://www.instagram.com/accounts/login/", timeout=30000)
-    page.wait_for_load_state("networkidle")
-    page.fill("input[name='username']", IG_USERNAME)
-    page.fill("input[name='password']", IG_PASSWORD)
-    page.click("button[type='submit']")
-    page.wait_for_url("https://www.instagram.com/**", timeout=20000)
-    print("  Logged in — session saved")
+    # Dismiss cookie consent if present
+    try:
+        page.click("button:has-text('Allow')", timeout=5000)
+    except Exception:
+        pass
+    try:
+        page.click("button:has-text('Accept')", timeout=3000)
+    except Exception:
+        pass
+    # Wait for login form (Instagram uses name='email' and name='pass')
+    page.wait_for_selector("input[name='email'], input[name='username']", timeout=30000)
+    username_field = "input[name='email']" if page.query_selector("input[name='email']") else "input[name='username']"
+    password_field = "input[name='pass']" if page.query_selector("input[name='pass']") else "input[name='password']"
+    page.fill(username_field, IG_USERNAME)
+    page.fill(password_field, IG_PASSWORD)
+    page.click("button[type='submit'], input[type='submit']")
+    # Wait until redirected away from login
+    try:
+        page.wait_for_url("**/instagram.com/**", timeout=30000)
+        page.wait_for_selector("svg[aria-label='Home'], [data-testid='mobile-nav-logged-in']", timeout=15000)
+    except Exception:
+        pass
+    print(f"  Logged in — current URL: {page.url}")
 
 
 def scrape_hashtag(page, tag: str) -> int:
-    page.goto(f"https://www.instagram.com/explore/tags/{tag}/", timeout=30000)
-    page.wait_for_load_state("networkidle", timeout=15000)
+    # Instagram redirects /explore/tags/ to /explore/search/keyword/
+    page.goto(f"https://www.instagram.com/explore/search/keyword/?q=%23{tag}", timeout=30000)
+    try:
+        page.wait_for_selector("a[href*='/p/']", timeout=12000)
+    except Exception:
+        pass
     time.sleep(2)
 
     posts = page.evaluate(EXTRACT_JS)

@@ -8,6 +8,15 @@ Run: conda run -n agent python scrapers/transcribe_youtube.py
 import os, re, subprocess, tempfile
 from pathlib import Path
 from dotenv import load_dotenv
+import whisper as _whisper
+
+_whisper_model = None
+
+def get_whisper():
+    global _whisper_model
+    if _whisper_model is None:
+        _whisper_model = _whisper.load_model("base")
+    return _whisper_model
 
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
@@ -110,7 +119,7 @@ def gemma_location(text: str):
 
 
 def get_subtitles(url: str, tmpdir: str) -> str | None:
-    result = subprocess.run(
+    subprocess.run(
         [
             YT_DLP, url,
             "--write-auto-sub", "--sub-lang", "es,en,es-419",
@@ -122,6 +131,44 @@ def get_subtitles(url: str, tmpdir: str) -> str | None:
     for f in Path(tmpdir).glob("sub*.vtt"):
         return f.read_text(errors="ignore")
     return None
+
+
+def whisper_transcribe(url: str, tmpdir: str, duration_limit: int = 600) -> str | None:
+    """Download audio and transcribe with Whisper. Skips videos longer than duration_limit seconds."""
+    # First check duration without downloading
+    probe = subprocess.run(
+        [YT_DLP, "--print", "duration", "--no-warnings", url],
+        capture_output=True, text=True, timeout=15,
+    )
+    try:
+        dur = int(probe.stdout.strip())
+        if dur > duration_limit:
+            print(f"    [whisper skip] {dur}s > {duration_limit}s limit")
+            return None
+    except ValueError:
+        pass  # unknown duration, attempt anyway
+
+    try:
+        subprocess.run(
+            [
+                YT_DLP, url,
+                "--extract-audio", "--audio-format", "mp3", "--audio-quality", "5",
+                "--no-warnings", "-o", f"{tmpdir}/audio.%(ext)s",
+            ],
+            capture_output=True, text=True, timeout=240,
+        )
+    except subprocess.TimeoutExpired:
+        print("    [whisper skip] download timed out")
+        return None
+    audio_files = list(Path(tmpdir).glob("audio.*"))
+    if not audio_files:
+        return None
+    try:
+        transcription = get_whisper().transcribe(str(audio_files[0]), language="es", fp16=False)
+        return transcription.get("text", "").strip()
+    except Exception as e:
+        print(f"    [whisper error] {e}")
+        return None
 
 
 def main():
@@ -143,17 +190,25 @@ def main():
 
         with tempfile.TemporaryDirectory() as tmp:
             vtt_text = get_subtitles(url, tmp)
+            whisper_text = None
+            if not vtt_text:
+                whisper_text = whisper_transcribe(url, tmp)
 
         if vtt_text:
             plain = strip_vtt(vtt_text)
-            # Try keyword on title + transcript combined
             combined = f"{row.get('text_content','')} {plain}"
             loc, lat, lng = keyword_location(combined)
             if not loc:
                 loc, lat, lng = gemma_location(plain)
             source = "subtitles"
+        elif whisper_text:
+            combined = f"{row.get('text_content','')} {whisper_text}"
+            loc, lat, lng = keyword_location(combined)
+            if not loc:
+                loc, lat, lng = gemma_location(whisper_text)
+            source = "whisper"
         else:
-            # No subs available — try Gemma on title alone
+            # No audio/subs — try Gemma on title alone
             loc, lat, lng = gemma_location(row.get("text_content", ""))
             source = "title+gemma"
 

@@ -9,6 +9,17 @@ mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN!;
 // Empty NEXT_PUBLIC_API_URL = use Next.js API routes (deployed on Vercel, no separate server)
 const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "ahora mismo";
+  if (mins < 60) return `hace ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `hace ${hrs} h`;
+  const days = Math.floor(hrs / 24);
+  return `hace ${days} d`;
+}
+
 interface Report {
   id: string;
   source: string;
@@ -287,7 +298,7 @@ export default function Home() {
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500 text-xs">
                       {r.author ? `@${r.author}` : ""}
-                      {r.post_time ? ` · ${new Date(r.post_time).toLocaleDateString("es-VE")}` : ""}
+                      {r.post_time ? ` · ${timeAgo(r.post_time)}` : ""}
                     </span>
                     <a href={r.source_url} target="_blank" rel="noopener noreferrer"
                       className="text-xs text-blue-400 hover:text-blue-300">
