@@ -705,6 +705,25 @@ export default function Home() {
     (m.getSource("building-damage") as mapboxgl.GeoJSONSource).setData({ type: "FeatureCollection", features: filtered });
   }, [buildingSearch]);
 
+  // Refresh building data every 30 min
+  useEffect(() => {
+    const refresh = () => {
+      const m = map.current;
+      if (!m || !m.getSource("building-damage")) return;
+      fetch(`${API}/building-damage`)
+        .then(r => r.json())
+        .then((geojson) => {
+          if (!geojson?.features) return;
+          setBuildingCount(geojson.features.length);
+          buildingFeaturesRef.current = geojson.features;
+          setBuildingList(geojson.features.map((f: GeoJSON.Feature) => ({ ...f.properties, _coords: (f.geometry as GeoJSON.Point).coordinates })));
+          (m.getSource("building-damage") as mapboxgl.GeoJSONSource).setData(geojson);
+        }).catch(() => {});
+    };
+    const id = setInterval(refresh, 30 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
   // Missing persons panel loader — resets list when filters/search change
   useEffect(() => {
     if (panelTab !== "personas") return;
