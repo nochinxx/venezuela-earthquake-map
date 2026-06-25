@@ -72,6 +72,7 @@ export default function LocalizadosPage() {
   const [submitDone, setSubmitDone] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [showStats, setShowStats] = useState(false);
+  const [sinContactoTotal, setSinContactoTotal] = useState<number | null>(null);
 
   // Load matched (our cross-references) on mount
   useEffect(() => {
@@ -244,7 +245,15 @@ export default function LocalizadosPage() {
           <span className="text-white font-semibold text-sm truncate">Personas localizadas</span>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => { setShowStats(true); }}
+              onClick={() => {
+        setShowStats(true);
+        if (sinContactoTotal === null) {
+          fetch("/api/missing-persons?count=1&status=sin-contacto")
+            .then(r => r.json())
+            .then((res: { total: number }) => setSinContactoTotal(res.total ?? null))
+            .catch(() => {});
+        }
+      }}
               className="px-2.5 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold transition-colors">
               📊
             </button>
@@ -625,84 +634,119 @@ export default function LocalizadosPage() {
             </div>
 
             <div className="overflow-y-auto px-5 py-4 flex flex-col gap-5">
-              {/* Top counts */}
+
+              {/* Hero numbers */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-800 rounded-xl p-4 flex flex-col gap-1">
-                  <p className="text-gray-400 text-[11px] uppercase tracking-wide">Total localizados</p>
-                  <p className="text-white text-2xl font-bold">{allTotal != null ? allTotal.toLocaleString("es") : "—"}</p>
-                  <p className="text-gray-500 text-[10px]">status: localizado + encontrado</p>
+                <div className="bg-cyan-950 border border-cyan-800 rounded-xl p-4 flex flex-col gap-1">
+                  <p className="text-cyan-400 text-[11px] uppercase tracking-wide font-semibold">Desaparecidos en la base</p>
+                  <p className="text-white text-2xl font-bold">{sinContactoTotal != null ? sinContactoTotal.toLocaleString("es-VE") : "…"}</p>
+                  <p className="text-cyan-700 text-[10px]">registros únicos sin contacto</p>
                 </div>
-                <div className="bg-gray-800 rounded-xl p-4 flex flex-col gap-1">
-                  <p className="text-gray-400 text-[11px] uppercase tracking-wide">Cruces SismoVenezuela</p>
-                  <p className="text-cyan-400 text-2xl font-bold">{matchedTotal != null ? matchedTotal.toLocaleString("es") : "—"}</p>
-                  <p className="text-gray-500 text-[10px]">verificados por nuestro algoritmo</p>
+                <div className="bg-green-950 border border-green-800 rounded-xl p-4 flex flex-col gap-1">
+                  <p className="text-green-400 text-[11px] uppercase tracking-wide font-semibold">Localizados</p>
+                  <p className="text-white text-2xl font-bold">{allTotal != null ? allTotal.toLocaleString("es-VE") : "…"}</p>
+                  {sinContactoTotal != null && allTotal != null && (
+                    <p className="text-green-700 text-[10px]">{((allTotal / (allTotal + sinContactoTotal)) * 100).toFixed(1)}% del total reportado</p>
+                  )}
                 </div>
               </div>
 
-              {/* Confidence breakdown */}
+              {/* Cross-reference section */}
               <div className="flex flex-col gap-2">
-                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">Nivel de confianza — Cruces confirmados</p>
+                <p className="text-gray-400 text-[11px] uppercase tracking-wide font-semibold">Cruces SismoVenezuela</p>
                 <div className="bg-gray-800 rounded-xl divide-y divide-gray-700 overflow-hidden">
                   <div className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🟡</span>
-                      <span className="text-gray-300 text-sm">Alta confianza (≥85%)</span>
+                    <div className="flex flex-col gap-0.5">
+                      <p className="text-gray-200 text-sm">Total procesados por el algoritmo</p>
+                      <p className="text-gray-500 text-[10px]">comparados contra la base de desaparecidos</p>
                     </div>
-                    <span className="text-white font-bold text-sm">{statsHigh + statsLegacyHigh}</span>
+                    <span className="text-white font-bold text-lg shrink-0">{matchedTotal != null ? matchedTotal.toLocaleString("es-VE") : "—"}</span>
                   </div>
                   <div className="flex items-center justify-between px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-base">🟠</span>
-                      <span className="text-gray-300 text-sm">Confianza media (72–84%)</span>
+                      <span>🟡</span>
+                      <div className="flex flex-col">
+                        <span className="text-gray-300 text-sm">Cruces confirmados (≥85%)</span>
+                        <span className="text-gray-500 text-[10px]">tenían reporte previo en la base</span>
+                      </div>
                     </div>
-                    <span className="text-white font-bold text-sm">{statsMedium}</span>
+                    <span className="text-white font-bold text-sm shrink-0">{statsHigh + statsLegacyHigh}</span>
                   </div>
                   <div className="flex items-center justify-between px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-base">⚫️</span>
-                      <span className="text-gray-300 text-sm">Nueva entrada (sin cruce previo)</span>
+                      <span>🟠</span>
+                      <div className="flex flex-col">
+                        <span className="text-gray-300 text-sm">Confianza media (72–84%)</span>
+                        <span className="text-gray-500 text-[10px]">requieren verificación manual</span>
+                      </div>
                     </div>
-                    <span className="text-white font-bold text-sm">{all.length > 0 ? statsNewInserts : "—"}</span>
+                    <span className="text-white font-bold text-sm shrink-0">{statsMedium}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span>⚫️</span>
+                      <div className="flex flex-col">
+                        <span className="text-gray-300 text-sm">Nuevas entradas</span>
+                        <span className="text-gray-500 text-[10px]">en hospital pero sin reporte previo</span>
+                      </div>
+                    </div>
+                    <span className="text-white font-bold text-sm shrink-0">{all.length > 0 ? statsNewInserts.toLocaleString("es-VE") : "—"}</span>
                   </div>
                 </div>
-                {all.length === 0 && (
-                  <p className="text-gray-600 text-[10px]">Abre la pestaña "Todos" para cargar el desglose completo.</p>
-                )}
               </div>
 
-              {/* By hospital list */}
-              {groupedByList.length > 0 && (
+              {/* Lists section */}
+              {(groupedByList.length > 0 || all.length === 0) && (
                 <div className="flex flex-col gap-2">
-                  <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">Listas procesadas — {groupedByList.length} fuentes</p>
-                  <div className="bg-gray-800 rounded-xl divide-y divide-gray-700 overflow-hidden">
-                    {groupedByList.map((g, i) => {
-                      const verified = g.people.filter(p => !!p.source_id).length;
-                      return (
-                        <div key={i} className="px-4 py-3 flex items-start justify-between gap-3">
-                          <div className="flex flex-col gap-0.5 min-w-0">
-                            <p className="text-gray-200 text-xs font-medium truncate">{g.title}</p>
-                            <a href={g.tweetUrl} target="_blank" rel="noopener noreferrer"
-                              className="text-amber-500 text-[10px] hover:underline truncate">{g.label} ↗</a>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="text-white text-sm font-bold">{g.people.length}</p>
-                            <p className="text-cyan-500 text-[10px]">{verified} 🟡</p>
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="flex items-center justify-between">
+                    <p className="text-gray-400 text-[11px] uppercase tracking-wide font-semibold">Listas hospitalarias procesadas</p>
+                    {groupedByList.length > 0 && (
+                      <span className="text-amber-400 text-xs font-bold">{groupedByList.length} listas · {groupedByList.reduce((s, g) => s + g.people.length, 0).toLocaleString("es-VE")} personas</span>
+                    )}
                   </div>
-                  {all.length === 0 && (
-                    <p className="text-gray-600 text-[10px]">Abre la pestaña "Listas" para ver el desglose completo.</p>
+                  {groupedByList.length > 0 ? (
+                    <div className="bg-gray-800 rounded-xl divide-y divide-gray-700 overflow-hidden">
+                      {groupedByList.map((g, i) => {
+                        const verified = g.people.filter(p => !!p.source_id).length;
+                        const hitRate = g.people.length > 0 ? Math.round((verified / g.people.length) * 100) : 0;
+                        return (
+                          <div key={i} className="px-4 py-3 flex items-start justify-between gap-3">
+                            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                              <p className="text-gray-200 text-xs font-medium leading-tight">{g.title}</p>
+                              <a href={g.tweetUrl} target="_blank" rel="noopener noreferrer"
+                                className="text-amber-500 text-[10px] hover:underline">{g.label} ↗</a>
+                            </div>
+                            <div className="shrink-0 text-right flex flex-col gap-0.5">
+                              <p className="text-white text-sm font-bold">{g.people.length} personas</p>
+                              <p className="text-cyan-500 text-[10px]">{verified} cruces 🟡 ({hitRate}%)</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-gray-600 text-[10px]">Abre la pestaña "Listas" para cargar el desglose por hospital.</p>
                   )}
                 </div>
               )}
 
-              {/* Note */}
+              {/* Sources */}
+              <div className="flex flex-col gap-2">
+                <p className="text-gray-400 text-[11px] uppercase tracking-wide font-semibold">Fuentes de la base de desaparecidos</p>
+                <div className="bg-gray-800 rounded-xl divide-y divide-gray-700 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer" className="text-violet-400 text-xs hover:underline">desaparecidosterremotovenezuela.com</a>
+                    <span className="text-gray-400 text-xs">~38,500 registros</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <a href="https://venezulatebusca.com" target="_blank" rel="noopener noreferrer" className="text-violet-400 text-xs hover:underline">venezulatebusca.com</a>
+                    <span className="text-gray-400 text-xs">~6,000 registros</span>
+                  </div>
+                </div>
+              </div>
+
               <p className="text-gray-600 text-[10px] leading-relaxed text-center border-t border-gray-800 pt-3">
-                Los cruces son aproximados. Un "localizado" indica que la persona apareció en una lista hospitalaria — no confirma estado médico ni de vida.<br/>
-                Fuentes: <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer" className="hover:text-gray-400 underline">desaparecidosterremotovenezuela.com</a>
-                {" · "}<a href="https://venezulatebusca.com" target="_blank" rel="noopener noreferrer" className="hover:text-gray-400 underline">venezulatebusca.com</a>
+                "Localizado" indica aparición en lista hospitalaria — no confirma estado médico ni de vida. Los cruces son aproximados; siempre verificar con la fuente original.
               </p>
             </div>
           </div>
