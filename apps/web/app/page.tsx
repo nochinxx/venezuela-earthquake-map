@@ -892,6 +892,18 @@ export default function Home() {
           </>
         )}
       </div>
+      {/* Yummy emergency strip — remove once offer expires */}
+      {showYummyCard && (
+        <div className="shrink-0 flex items-center gap-2 px-3 py-1 bg-green-950 border-b border-green-800 text-xs">
+          <a href="https://www.instagram.com/p/DZ_40JluPsA/" target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2 flex-1 min-w-0 hover:opacity-80 transition-opacity">
+            <span className="text-green-400 font-bold shrink-0">🚗 Yummy</span>
+            <span className="text-green-200 truncate">Viajes gratis a hospitales · Cero surge pricing · 0% comisión conductores</span>
+            <span className="text-green-600 shrink-0 hidden sm:inline">@vicentezavarce →</span>
+          </a>
+          <button onClick={() => setShowYummyCard(false)} className="text-green-700 hover:text-green-400 shrink-0 leading-none text-base" aria-label="Cerrar">×</button>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-gray-900 border-b border-gray-800 shrink-0">
         {/* Main header row */}
@@ -1640,27 +1652,6 @@ export default function Home() {
             )}
           </div>
 
-        {/* Yummy emergency service card — time-sensitive 24-25 Jun */}
-        {showYummyCard && (
-          <div className="max-w-[200px]">
-            <div className="relative flex flex-col gap-1 bg-green-950/95 border border-green-700 rounded-lg px-3 py-2.5">
-              <button
-                onClick={() => setShowYummyCard(false)}
-                className="absolute top-1.5 right-1.5 text-green-700 hover:text-green-400 text-sm leading-none"
-                aria-label="Cerrar">×</button>
-              <a href="https://www.instagram.com/p/DZ_40JluPsA/" target="_blank" rel="noopener noreferrer"
-                className="flex flex-col gap-1 hover:opacity-90 transition-opacity">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-green-400 font-bold text-xs uppercase tracking-wide">🚗 Yummy</span>
-                  <span className="text-green-600 text-xs">· 24–25 Jun</span>
-                </div>
-                <p className="text-white text-xs font-semibold leading-tight">Viajes gratis a hospitales y clínicas</p>
-                <p className="text-green-300 text-xs leading-tight">Cero surge pricing · 0% comisión conductores</p>
-                <p className="text-green-600 text-xs">@vicentezavarce →</p>
-              </a>
-            </div>
-          </div>
-        )}
 
         {/* Localizados card */}
         {foundCount != null && foundCount > 0 && (
