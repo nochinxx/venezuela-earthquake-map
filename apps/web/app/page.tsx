@@ -65,6 +65,7 @@ interface MissingPerson {
   status?: string | null;
   external_source?: string | null;
   source2_url?: string | null;
+  source_id?: string | null;
 }
 
 const EMERGENCY_DIR = [
@@ -1204,11 +1205,13 @@ export default function Home() {
                           {/* Source platform link */}
                           {p.external_source && !String(p.external_source).includes("SismoVenezuela") && (() => {
                             const isDesap = String(p.external_source).includes("desaparecidos");
-                            const platformUrl = isDesap ? "https://desaparecidosterremotovenezuela.com" : "https://venezulatebusca.com";
+                            const personUrl = isDesap && p.source_id
+                              ? `https://desaparecidosterremotovenezuela.com/?persona=${p.source_id}`
+                              : isDesap ? "https://desaparecidosterremotovenezuela.com" : "https://venezulatebusca.com";
                             const platformLabel = isDesap ? "desaparecidosterremotovenezuela.com" : "venezulatebusca.com";
                             return (
-                              <a href={platformUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-400 hover:text-violet-200">
-                                📋 Fuente: {platformLabel} ↗
+                              <a href={personUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-400 hover:text-violet-200">
+                                📋 {p.source_id ? "Ver ficha" : "Fuente"}: {platformLabel} ↗
                               </a>
                             );
                           })()}
@@ -1520,10 +1523,12 @@ export default function Home() {
                         )}
                         {p.external_source && !String(p.external_source).includes("SismoVenezuela") && (() => {
                           const isDesap = String(p.external_source).includes("desaparecidos");
+                          const personUrl = isDesap && p.source_id
+                            ? `https://desaparecidosterremotovenezuela.com/?persona=${p.source_id}`
+                            : isDesap ? "https://desaparecidosterremotovenezuela.com" : "https://venezulatebusca.com";
                           return (
-                            <a href={isDesap ? "https://desaparecidosterremotovenezuela.com" : "https://venezulatebusca.com"}
-                              target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-400 hover:text-violet-200">
-                              {isDesap ? "desaparecidos.com ↗" : "venezulatebusca.com ↗"}
+                            <a href={personUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-400 hover:text-violet-200">
+                              {isDesap ? (p.source_id ? "Ver ficha ↗" : "desaparecidos.com ↗") : "venezulatebusca.com ↗"}
                             </a>
                           );
                         })()}

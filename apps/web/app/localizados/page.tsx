@@ -260,7 +260,7 @@ export default function LocalizadosPage() {
                 <div className="flex flex-col gap-2">
                   {group.people.map((p, pi) => {
                     const isExpanded = expandedId === p.id;
-                    const apiUrl = `https://desaparecidos-terremoto-api.theempire.tech/api/personas/${p.source_id}`;
+                    const apiUrl = `https://desaparecidosterremotovenezuela.com/?persona=${p.source_id}`;
                     return (
                       <div key={pi} className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
                         {/* Clickable header row */}
@@ -288,9 +288,8 @@ export default function LocalizadosPage() {
                                 <p className="text-gray-600 text-[10px] uppercase tracking-wide">Reporte de desaparecido</p>
                                 <a href={apiUrl} target="_blank" rel="noopener noreferrer"
                                   className="text-violet-400 text-xs hover:text-violet-200 hover:underline">
-                                  📋 Ver registro en desaparecidosterremotovenezuela.com ↗
+                                  📋 Ver ficha en desaparecidosterremotovenezuela.com ↗
                                 </a>
-                                <p className="text-gray-600 text-[10px]">* abre los datos crudos del registro</p>
                               </div>
                               {/* Hospital confirmation */}
                               <div className="flex flex-col gap-0.5">
@@ -335,11 +334,13 @@ export default function LocalizadosPage() {
                           ? <p className="text-cyan-400 text-[10px] font-medium">🔍 Cruce SismoVenezuela</p>
                           : (() => {
                               const isDesap = String(p.external_source ?? "").includes("desaparecidos");
-                              const platformUrl = isDesap ? "https://desaparecidosterremotovenezuela.com" : "https://venezulatebusca.com";
+                              const personUrl = isDesap && p.source_id
+                                ? `https://desaparecidosterremotovenezuela.com/?persona=${p.source_id}`
+                                : isDesap ? "https://desaparecidosterremotovenezuela.com" : "https://venezulatebusca.com";
                               return (
-                                <a href={platformUrl} target="_blank" rel="noopener noreferrer"
+                                <a href={personUrl} target="_blank" rel="noopener noreferrer"
                                   className="text-green-500 text-[10px] hover:text-green-300 hover:underline">
-                                  📋 {badge} ↗
+                                  📋 {p.source_id ? `Ver ficha en ${badge}` : badge} ↗
                                 </a>
                               );
                             })()
