@@ -405,7 +405,11 @@ export default function Home() {
         const affected = p.affected ? `<br/>👥 ${p.affected} afectados` : "";
         const confirmed = p.confirmations ? `<br/>✅ ${p.confirmations} confirmaciones` : "";
         const src = p.source as string | undefined;
-        const srcLink = src ? `<br/><a href="${SOURCE_URL[src] ?? "#"}" target="_blank" style="color:#1d9bf0;font-size:10px;text-decoration:underline">${src}</a>` : "";
+        const extId = p.external_id as string | undefined;
+        const directUrl = src === "terremotovenezuela.com" && extId
+          ? `https://terremotovenezuela.com/edificio/${extId}`
+          : (SOURCE_URL[src ?? ""] ?? null);
+        const srcLink = directUrl ? `<br/><a href="${directUrl}" target="_blank" style="color:#1d9bf0;font-size:10px;text-decoration:underline">Ver ficha completa →</a>` : "";
         buildingPopupRef.current = new mapboxgl.Popup({ maxWidth: "280px" })
           .setLngLat([lng, lat])
           .setHTML(

@@ -6,7 +6,7 @@ export const revalidate = 120; // cache 2 min
 export async function GET() {
   const { data, error } = await supabase
     .from("building_damage")
-    .select("id,external_source,lat,lng,place,damage_type,affected,needs,photo_url,confirmations,reported_at")
+    .select("id,external_id,external_source,lat,lng,place,damage_type,affected,needs,photo_url,confirmations,reported_at")
     .order("reported_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -18,6 +18,7 @@ export async function GET() {
       geometry: { type: "Point" as const, coordinates: [r.lng, r.lat] },
       properties: {
         id: r.id,
+        external_id: r.external_id,
         source: r.external_source,
         place: r.place,
         damage_type: r.damage_type,
