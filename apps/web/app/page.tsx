@@ -790,11 +790,6 @@ export default function Home() {
               className="px-2.5 py-1 rounded text-xs bg-red-700 hover:bg-red-600 text-white font-semibold">
               + Reportar
             </button>
-            <a href="https://ko-fi.com/venezuelaearthquakemap" target="_blank" rel="noopener noreferrer"
-              className="px-2 py-0.5 rounded text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 hidden sm:inline-flex items-center gap-1"
-              title="Apoya este proyecto">
-              ☕ Donar
-            </a>
             <button onClick={() => setShowSources(true)}
               className="px-2 py-0.5 rounded text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 hidden sm:flex items-center gap-1 shrink-0"
               title="Fuentes y recursos aliados">
