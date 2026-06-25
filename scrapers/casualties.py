@@ -135,6 +135,22 @@ def get_latest() -> dict | None:
     return rows[0] if rows else None
 
 
+def has_recent_manual_entry(within_hours: int = 24) -> bool:
+    """Return True if a manual (auto_extracted=false) row exists within the last N hours."""
+    from datetime import datetime, timedelta, timezone
+    since = (datetime.now(timezone.utc) - timedelta(hours=within_hours)).isoformat()
+    rows = (
+        sb.table("casualty_stats")
+        .select("id")
+        .eq("auto_extracted", False)
+        .gt("scraped_at", since)
+        .limit(1)
+        .execute()
+        .data
+    )
+    return len(rows) > 0
+
+
 def scrape_timeline(page, handle: str, source_label: str) -> list[dict]:
     """Scrape recent tweets from a specific verified account."""
     page.goto(f"https://x.com/{handle}", timeout=30000)
@@ -225,6 +241,11 @@ def main():
 
     if not candidates:
         print("[casualties] No casualty figures found in verified sources")
+        return
+
+    # Don't override a manual entry with auto-scraped data
+    if has_recent_manual_entry():
+        print("[casualties] Manual entry exists — skipping auto-insert to avoid overriding verified figure")
         return
 
     # Prioritize: most deaths reported (verified sources only, then any)

@@ -73,3 +73,32 @@ CREATE POLICY "public_read_stats" ON casualty_stats
 
 CREATE POLICY "service_role_write_stats" ON casualty_stats
   FOR ALL USING (auth.role() = 'service_role');
+
+-- Building damage / collapse reports (aggregated from partner sites)
+CREATE TABLE IF NOT EXISTS building_damage (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  external_id     text,
+  external_source text NOT NULL,
+  lat             double precision NOT NULL,
+  lng             double precision NOT NULL,
+  place           text,
+  damage_type     text,
+  affected        integer,
+  needs           text,
+  photo_url       text,
+  confirmations   integer DEFAULT 0,
+  reported_at     timestamptz,
+  created_at      timestamptz DEFAULT now(),
+  UNIQUE(external_source, external_id)
+);
+
+CREATE INDEX IF NOT EXISTS building_damage_source_idx   ON building_damage(external_source);
+CREATE INDEX IF NOT EXISTS building_damage_location_idx ON building_damage(lat, lng);
+
+ALTER TABLE building_damage ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "public_read_buildings" ON building_damage
+  FOR SELECT USING (true);
+
+CREATE POLICY "service_role_write_buildings" ON building_damage
+  FOR ALL USING (auth.role() = 'service_role');

@@ -315,6 +315,10 @@ export default function Home() {
   const [legendOpen, setLegendOpen] = useState(false);
   const [bannerOpen, setBannerOpen] = useState(true);
   const [showYummyCard, setShowYummyCard] = useState(true);
+  const [showBuildings, setShowBuildings] = useState(true);
+  const [buildingCount, setBuildingCount] = useState<number | null>(null);
+  const [selectedBuilding, setSelectedBuilding] = useState<Record<string, unknown> | null>(null);
+  const buildingPopupRef = useRef<mapboxgl.Popup | null>(null);
   const [feed, setFeed] = useState<Report[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
 
@@ -600,6 +604,71 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showExternalMissing]);
 
+  // Building damage layer (terremotovenezuela.app critical reports)
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !m.loaded()) return;
+
+    const SRC = "building-damage";
+    const LAYER = "building-damage-points";
+
+    if (!showBuildings) {
+      if (m.getLayer(LAYER)) m.removeLayer(LAYER);
+      if (m.getSource(SRC)) m.removeSource(SRC);
+      setBuildingCount(null);
+      return;
+    }
+
+    fetch(`${API}/building-damage`)
+      .then(r => r.json())
+      .then((geojson) => {
+        if (!geojson?.features) return;
+        setBuildingCount(geojson.features.length);
+        if (m.getSource(SRC)) {
+          (m.getSource(SRC) as mapboxgl.GeoJSONSource).setData(geojson);
+          return;
+        }
+        m.addSource(SRC, { type: "geojson", data: geojson });
+        m.addLayer({
+          id: LAYER,
+          type: "circle",
+          source: SRC,
+          paint: {
+            "circle-color": "#f59e0b",
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 7, 12, 11],
+            "circle-stroke-width": 2,
+            "circle-stroke-color": "#fff",
+            "circle-opacity": 0.92,
+          },
+        });
+
+        m.on("click", LAYER, (e) => {
+          const feat = e.features?.[0];
+          if (!feat) return;
+          const p = feat.properties as Record<string, unknown>;
+          const [lng, lat] = (feat.geometry as GeoJSON.Point).coordinates;
+          if (buildingPopupRef.current) buildingPopupRef.current.remove();
+          const affected = p.affected ? `<br/>👥 ${p.affected} afectados` : "";
+          const confirmed = p.confirmations ? `<br/>✅ ${p.confirmations} confirmaciones` : "";
+          const source = `<br/><span style="color:#999;font-size:10px">${p.source ?? ""}</span>`;
+          buildingPopupRef.current = new mapboxgl.Popup({ maxWidth: "260px" })
+            .setLngLat([lng, lat])
+            .setHTML(
+              `<div style="font-size:12px;color:#111;padding:2px 0">
+                <strong style="font-size:13px">🏚 ${p.place ?? "Edificio afectado"}</strong>
+                ${p.needs ? `<br/><span style="color:#555">${p.needs}</span>` : ""}
+                ${affected}${confirmed}${source}
+              </div>`
+            )
+            .addTo(m);
+        });
+        m.on("mouseenter", LAYER, () => { m.getCanvas().style.cursor = "pointer"; });
+        m.on("mouseleave", LAYER, () => { m.getCanvas().style.cursor = ""; });
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showBuildings]);
+
   // Missing persons panel loader — resets list when filters/search change
   useEffect(() => {
     if (panelTab !== "personas") return;
@@ -707,7 +776,16 @@ export default function Home() {
         {/* Main header row */}
         <div className="flex items-center justify-between px-3 py-2 gap-2">
           <div className="min-w-0">
-            <h1 className="font-bold text-red-400 text-base leading-tight truncate">🇻🇪 SismoVenezuela</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="font-bold text-red-400 text-base leading-tight truncate">🇻🇪 SismoVenezuela</h1>
+              <button
+                onClick={() => setShowSources(true)}
+                className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-900/60 text-blue-300 border border-blue-700/40 hover:bg-blue-800/60 transition-colors shrink-0"
+                title="Ver fuentes consolidadas"
+              >
+                Consolida 5 fuentes
+              </button>
+            </div>
             {stats && (
               <p className="text-gray-500 text-xs">
                 <span className="text-gray-300 font-semibold">{stats.total}</span> reportes
@@ -740,6 +818,11 @@ export default function Home() {
                 title="Mostrar marcadores de desaparecidos en el mapa"
               >
                 🗺 {externalMissingLoading ? "..." : externalMissingTotal ? `${externalMissingTotal.toLocaleString()} en mapa` : "Ver en mapa"}
+              </button>
+              <button onClick={() => setShowBuildings(v => !v)}
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${showBuildings ? "bg-amber-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                title="Edificios afectados / derrumbes">
+                🏚 Edificios{buildingCount != null ? ` · ${buildingCount}` : ""}
               </button>
             </div>
             {/* Always visible: Reportar + guide */}
@@ -797,6 +880,10 @@ export default function Home() {
             <button onClick={() => { setShowExternalMissing(v => !v); if (!showExternalMissing) setPanelTab("personas"); setShowMobileMenu(false); }}
               className={`px-3 py-1.5 rounded-full text-xs font-medium ${showExternalMissing ? "bg-violet-800 text-violet-200" : "bg-gray-800 text-gray-400"}`}>
               🗺 {externalMissingTotal ? `${externalMissingTotal.toLocaleString()} en mapa` : "Ver en mapa"}
+            </button>
+            <button onClick={() => { setShowBuildings(v => !v); setShowMobileMenu(false); }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium ${showBuildings ? "bg-amber-700 text-white" : "bg-gray-800 text-gray-400"}`}>
+              🏚 Edificios{buildingCount != null ? ` · ${buildingCount}` : ""}
             </button>
             <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
               className="px-3 py-1.5 rounded-full text-xs bg-gray-800 text-gray-400">
