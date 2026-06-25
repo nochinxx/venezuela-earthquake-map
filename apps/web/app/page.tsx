@@ -62,6 +62,95 @@ interface MissingPerson {
   submitted_at: string;
 }
 
+const EMERGENCY_DIR = [
+  {
+    category: "🏥 Hospitales — Caracas",
+    entries: [
+      { name: "Hospital Andrés Herrera Vegas", location: "El Algodonal", phone: "(212) 472.31.38" },
+      { name: "Hospital Centro Médico IVSS", location: "Caricuao", phone: "(212) 432.55.11" },
+      { name: "Hospital Clínico Universitario", location: "Chaguaramos", phone: "(212) 606.71.11" },
+      { name: "Hospital de Clínicas Caracas", location: "San Bernardino", phone: "(212) 508.61.11" },
+      { name: "Hospital de Niños J.M. de Los Ríos", location: "San Bernardino", phone: "(212) 574.35.11" },
+      { name: "Hospital Dr. Domingo Luciani", location: "El Llanito", phone: "(212) 257.87.12" },
+      { name: "Hospital El Algodonal", location: "Antímano", phone: "(212) 472.54.10" },
+      { name: "Hospital El Manicomio", location: "Caracas", phone: "(212) 860.13.13" },
+      { name: "Hospital José Gregorio Hernández", location: "Los Magallanes", phone: "(212) 870.78.97" },
+      { name: "Hospital Miguel Pérez Carreño", location: "Bella Vista", phone: "(212) 472.84.72" },
+      { name: "Hospital Militar", location: "San Martín", phone: "(212) 406.12.41" },
+      { name: "Hospital Periférico de Catia", location: "Catia", phone: "(212) 870.27.71" },
+      { name: "Hospital Periférico de Coche", location: "Coche", phone: "(212) 681.11.33" },
+      { name: "Policlínica David Lobo", location: "Santa Rosalía", phone: "(212) 541.54.65" },
+      { name: "Policlínica La Arboleda", location: "San Bernardino", phone: "(212) 550.18.11" },
+      { name: "Policlínica Las Mercedes", location: "Las Mercedes", phone: "(212) 993.23.23" },
+      { name: "Policlínica Santiago de León", location: "Sabana Grande", phone: "(212) 762.90.25" },
+      { name: "Centro Clínico / Clínica Razetti", location: "La Candelaria", phone: "(212) 5970248" },
+      { name: "Centro Médico de Caracas", location: "San Bernardino", phone: "(212) 555.91.11" },
+      { name: "Clínica La Floresta", location: "Los Palos Grandes", phone: "(212) 285.60.58" },
+      { name: "Clínica Leopoldo Aguerrevere", location: "Prados del Este", phone: "(212) 907.08.11" },
+      { name: "Clínica Rescarven", location: "Santa Cecilia", phone: "(212) 239.56.86" },
+    ],
+  },
+  {
+    category: "🚑 Ambulancias",
+    entries: [
+      { name: "Aeroambulancias", location: "", phone: "(0212) 993.25.41 / 992.89.80 / 992.89.90 / 991.79.40" },
+      { name: "Rescarven", location: "", phone: "(0212) 993.69.11 / 993.69.91 / 993.13.10 / 993.33.67" },
+      { name: "Servicio Ambulancia Metropolitano", location: "", phone: "(0212) 545.45.45 / 545.46.55 / 577.92.09" },
+    ],
+  },
+  {
+    category: "🚒 Bomberos — Caracas",
+    entries: [
+      { name: "Bomberos Antímano", location: "", phone: "(0212) 472.20.54" },
+      { name: "Bomberos Catia la Mar", location: "", phone: "(0212) 351.99.66" },
+      { name: "Bomberos Chacao", location: "", phone: "(0212) 265.32.61" },
+      { name: "Bomberos del Este / Cafetal", location: "", phone: "(0212) 987.43.34 / 985.50.60" },
+      { name: "Bomberos El Paraíso", location: "", phone: "(0212) 481.09.61" },
+      { name: "Bomberos El Valle", location: "", phone: "(0212) 672.01.75 / 672.06.36" },
+      { name: "Bomberos La Guaira", location: "", phone: "(0212) 332.76.20 / 331.04.45" },
+      { name: "Bomberos La Trinidad", location: "", phone: "(0212) 943.43.61" },
+      { name: "Bomberos La Urbina", location: "", phone: "(0212) 241.66.41" },
+      { name: "Bomberos Metropolitanos", location: "", phone: "(0212) 545.45.45" },
+      { name: "Bomberos Miranda", location: "", phone: "(0212) 235.69.67" },
+      { name: "Bomberos Plaza Venezuela", location: "", phone: "(0212) 793.00.39 / 793.64.57" },
+      { name: "Bomberos San Bernardino", location: "", phone: "(0212) 577.92.09" },
+      { name: "Bomberos Sucre", location: "", phone: "(0212) 985.36.40" },
+    ],
+  },
+  {
+    category: "🛡️ Protección Civil",
+    entries: [
+      { name: "Protección Civil (líneas 0800)", location: "", phone: "0800-5588427 / 0800-2668446 / 0800-2624368" },
+      { name: "Instituto de Protección Civil", location: "", phone: "(0212) 631.86.62 / 631.90.58 / 662.84.76 / 545.93.91" },
+      { name: "Defensa Civil Alcaldía Mayor", location: "", phone: "(0212) 662.67.59 / 662.32.05" },
+      { name: "Defensa Civil Nacional", location: "", phone: "0800.28326 / 0800.24845 / (0212) 483.98.05" },
+    ],
+  },
+  {
+    category: "👮 Policía",
+    entries: [
+      { name: "CICPC", location: "", phone: "(0212) 571.35.33 / 571.38.44 / 571.32.66" },
+      { name: "Policía Metropolitana", location: "", phone: "(0212) 862.58.71 / 862.58.72" },
+      { name: "Policía Municipal Chacao", location: "", phone: "(0212) 264.1256 / 264.00.50" },
+      { name: "Policía Municipal Baruta", location: "", phone: "(0212) 943.28.55 / 943.62.77" },
+      { name: "Policía Municipal Sucre", location: "", phone: "(0212) 242.21.11 / 242.22.11" },
+      { name: "Policía Municipal del Hatillo", location: "", phone: "(0212) 961.16.82" },
+    ],
+  },
+  {
+    category: "⛑️ Rescate",
+    entries: [
+      { name: "Cuerpo de Emergencias Rescate y Transmisiones", location: "", phone: "(0212) 545.47.47" },
+      { name: "Grupo de Rescate Caracas (El Ávila)", location: "", phone: "(0212) 615.63.86 / 415.46.61" },
+      { name: "Grupo de Rescate Venezuela", location: "", phone: "(0212) 977.47.10" },
+      { name: "Organización de Rescate Humboldt", location: "", phone: "(0212) 234.22.34 / 0414.926.21.39" },
+      { name: "Socorristas Cruz Roja", location: "", phone: "(0212) 571.47.13" },
+      { name: "Inspectoría de Tránsito (I.N.T.)", location: "", phone: "167" },
+      { name: "Brigada Ministerio Transporte Terrestre", location: "", phone: "02125372677" },
+    ],
+  },
+];
+
 const WALKTHROUGH_STEPS = [
   {
     icon: "🌡️",
@@ -156,6 +245,7 @@ export default function Home() {
   const missingMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [walkthroughStep, setWalkthroughStep] = useState(0);
+  const [showEmergencyDir, setShowEmergencyDir] = useState(false);
   const clickedCoords = useRef<{ lat: number; lng: number } | null>(null);
 
   function sortReports(rows: Report[], order: SortOrder) {
@@ -571,7 +661,7 @@ export default function Home() {
         <div className="absolute bottom-8 left-4 flex flex-col gap-2 z-10">
           {/* Emergency numbers */}
           <div className="bg-red-950/95 border border-red-700 rounded p-3 text-xs flex flex-col gap-1.5">
-            <p className="font-bold text-red-300 mb-0.5 uppercase tracking-wide">📞 Emergencias Venezuela</p>
+            <p className="font-bold text-red-300 mb-0.5 uppercase tracking-wide">📞 Emergencias</p>
             <div className="flex items-center justify-between gap-4">
               <span className="text-gray-400">Emergencia nacional</span>
               <span className="font-bold text-white">911</span>
@@ -584,6 +674,10 @@ export default function Home() {
               <span className="text-gray-400">Bomberos</span>
               <span className="font-bold text-white">167</span>
             </div>
+            <button onClick={() => setShowEmergencyDir(true)}
+              className="mt-1 text-red-400 hover:text-red-200 text-left underline">
+              Ver directorio completo →
+            </button>
           </div>
 
           {/* Damage legend */}
@@ -628,6 +722,62 @@ export default function Home() {
               <a href={selectedRelief.source_url} target="_blank" rel="noopener noreferrer"
                 className="text-xs text-green-400 hover:text-green-300">Ver fuente →</a>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Emergency directory modal */}
+      {showEmergencyDir && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-red-800 rounded-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 shrink-0">
+              <div>
+                <h2 className="font-bold text-white text-lg">📞 Directorio de Emergencias — Venezuela</h2>
+                <p className="text-gray-500 text-xs mt-0.5">Fuente: @cusicavzla · 24/06/26</p>
+              </div>
+              <button onClick={() => setShowEmergencyDir(false)} className="text-gray-500 hover:text-white text-2xl leading-none ml-4">×</button>
+            </div>
+
+            {/* Carrier note */}
+            <div className="px-6 py-2 bg-gray-800/50 border-b border-gray-800 shrink-0">
+              <p className="text-gray-400 text-xs">
+                <span className="text-yellow-400 font-semibold">Números de emergencia según operadora:</span>{" "}
+                171 (Cantv fijo) · *1 (Movilnet) · 112 (Digitel) · 911 (Movistar)
+              </p>
+            </div>
+
+            <div className="overflow-y-auto px-6 py-4 flex flex-col gap-6">
+              {EMERGENCY_DIR.map((section) => (
+                <div key={section.category}>
+                  <h3 className="font-bold text-red-400 text-sm mb-2">{section.category}</h3>
+                  <div className="flex flex-col gap-1">
+                    {section.entries.map((e, i) => (
+                      <div key={i} className="flex items-start justify-between gap-4 py-1.5 border-b border-gray-800/60 last:border-0">
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-white text-xs font-medium">{e.name}</span>
+                          {e.location && <span className="text-gray-500 text-xs">{e.location}</span>}
+                        </div>
+                        <span className="text-green-400 text-xs font-mono shrink-0">{e.phone}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Safety tips */}
+              <div>
+                <h3 className="font-bold text-yellow-400 text-sm mb-2">⚠️ Recomendaciones</h3>
+                <ol className="flex flex-col gap-1.5 text-gray-400 text-xs list-decimal list-inside">
+                  <li>Evitar edificaciones con daños estructurales.</li>
+                  <li>En casa: quita obstáculos de los pasillos, deja las llaves en la puerta.</li>
+                  <li>Ten a mano ropa, zapatos y tu bolso de emergencia.</li>
+                  <li>Mantén teléfonos y powerbanks cargados.</li>
+                  <li>Ten una linterna cerca, evita velas.</li>
+                  <li>Mascotas: collarines, correas y kenels listos.</li>
+                  <li className="text-red-400 font-semibold">Evita replicar rumores. Revisa solo fuentes verificadas.</li>
+                </ol>
+              </div>
+            </div>
           </div>
         </div>
       )}
