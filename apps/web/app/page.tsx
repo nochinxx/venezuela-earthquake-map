@@ -36,7 +36,8 @@ const DAMAGE_LABEL: Record<number, string> = {
 export default function Home() {
   const mapRef = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
-  const [selected, setSelected] = useState<Report | null>(null);
+  const [selected, setSelected] = useState<Report[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [stats, setStats] = useState<{ total: number; by_source: Record<string, number> } | null>(null);
   const [source, setSource] = useState<string>("");
 
@@ -124,14 +125,36 @@ export default function Home() {
         },
       });
 
-      m.on("click", "reports-points", (e) => {
-        const props = e.features?.[0]?.properties;
-        if (props) {
-          setSelected({ ...props, media_urls: JSON.parse(props.media_urls ?? "[]") } as Report);
-        }
+      m.on("click", "reports-points", async (e) => {
+        const feat = e.features?.[0];
+        if (!feat) return;
+        const [lng, lat] = (feat.geometry as GeoJSON.Point).coordinates;
+        const loc = feat.properties?.location_name ?? null;
+        setSelectedLocation(loc);
+        const res = await fetch(`${API}/reports/nearby?lat=${lat}&lng=${lng}&radius_km=20`);
+        const rows: Report[] = await res.json();
+        setSelected(rows.map(r => ({ ...r, media_urls: Array.isArray(r.media_urls) ? r.media_urls : [] })));
       });
+
+      m.on("click", "reports-clusters", (e) => {
+        const feat = e.features?.[0];
+        if (!feat || !map.current) return;
+        const clusterId = feat.properties?.cluster_id;
+        const src = map.current.getSource("reports") as mapboxgl.GeoJSONSource;
+        src.getClusterLeaves(clusterId, 100, 0, async (_err, leaves) => {
+          if (!leaves?.length) return;
+          const [lng, lat] = (leaves[0].geometry as GeoJSON.Point).coordinates;
+          setSelectedLocation(leaves[0].properties?.location_name ?? null);
+          const res = await fetch(`${API}/reports/nearby?lat=${lat}&lng=${lng}&radius_km=30`);
+          const rows: Report[] = await res.json();
+          setSelected(rows.map(r => ({ ...r, media_urls: Array.isArray(r.media_urls) ? r.media_urls : [] })));
+        });
+      });
+
       m.on("mouseenter", "reports-points", () => { m.getCanvas().style.cursor = "pointer"; });
       m.on("mouseleave", "reports-points", () => { m.getCanvas().style.cursor = ""; });
+      m.on("mouseenter", "reports-clusters", () => { m.getCanvas().style.cursor = "pointer"; });
+      m.on("mouseleave", "reports-clusters", () => { m.getCanvas().style.cursor = ""; });
     });
   }
 
@@ -180,44 +203,58 @@ export default function Home() {
       <div className="flex flex-1 overflow-hidden relative">
         <div ref={mapRef} className="flex-1" />
 
-        {selected && (
-          <div className="absolute right-0 top-0 h-full w-80 bg-gray-900/95 border-l border-gray-800 overflow-y-auto p-4 flex flex-col gap-3 z-10">
-            <div className="flex justify-between items-start">
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${
-                selected.source === "twitter" ? "bg-blue-900 text-blue-300" :
-                selected.source === "instagram" ? "bg-pink-900 text-pink-300" :
-                "bg-red-900 text-red-300"
-              }`}>{selected.source}</span>
-              <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+        {selected.length > 0 && (
+          <div className="absolute right-0 top-0 h-full w-96 bg-gray-900/95 border-l border-gray-800 overflow-y-auto z-10">
+            <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-4 py-3 flex justify-between items-center">
+              <div>
+                <p className="font-semibold text-white text-sm">
+                  📍 {selectedLocation ?? "Zona afectada"}
+                </p>
+                <p className="text-gray-400 text-xs">{selected.length} reporte{selected.length !== 1 ? "s" : ""}</p>
+              </div>
+              <button onClick={() => { setSelected([]); setSelectedLocation(null); }}
+                className="text-gray-500 hover:text-white text-xl leading-none">×</button>
             </div>
-            {selected.location_name && <p className="text-white font-semibold text-sm">📍 {selected.location_name}</p>}
-            {selected.damage_level && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">Severidad</span>
-                <div className="flex gap-1">
-                  {[1,2,3,4,5].map(n => (
-                    <div key={n} className="w-4 h-4 rounded-sm" style={{
-                      background: n <= selected.damage_level ? DAMAGE_COLOR[selected.damage_level] : "#374151"
-                    }} />
-                  ))}
+
+            <div className="flex flex-col divide-y divide-gray-800">
+              {selected.map((r) => (
+                <div key={r.id} className="p-4 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${
+                      r.source === "twitter" ? "bg-blue-900 text-blue-300" :
+                      r.source === "instagram" ? "bg-pink-900 text-pink-300" :
+                      "bg-red-900 text-red-300"
+                    }`}>{r.source}</span>
+                    {r.damage_level && (
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full" style={{ background: DAMAGE_COLOR[r.damage_level] }} />
+                        <span className="text-xs text-gray-400">{DAMAGE_LABEL[r.damage_level]}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {r.text_content && (
+                    <p className="text-gray-300 text-sm leading-relaxed">{r.text_content}</p>
+                  )}
+
+                  {r.media_urls?.length > 0 && (
+                    <img src={r.media_urls[0]} alt="media"
+                      className="rounded w-full object-cover max-h-40" />
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500 text-xs">
+                      {r.author ? `@${r.author}` : ""}
+                      {r.post_time ? ` · ${new Date(r.post_time).toLocaleDateString("es-VE")}` : ""}
+                    </span>
+                    <a href={r.source_url} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-blue-400 hover:text-blue-300">
+                      Ver fuente →
+                    </a>
+                  </div>
                 </div>
-                <span className="text-xs text-gray-400">{DAMAGE_LABEL[selected.damage_level]}</span>
-              </div>
-            )}
-            {selected.text_content && <p className="text-gray-300 text-sm leading-relaxed">{selected.text_content}</p>}
-            {selected.media_urls?.length > 0 && (
-              <div className="flex flex-col gap-2">
-                {selected.media_urls.map((url, i) => (
-                  <img key={i} src={url} alt="media" className="rounded w-full object-cover max-h-48" />
-                ))}
-              </div>
-            )}
-            {selected.author && <p className="text-gray-500 text-xs">Por @{selected.author}</p>}
-            {selected.post_time && <p className="text-gray-500 text-xs">{new Date(selected.post_time).toLocaleString("es-VE")}</p>}
-            <a href={selected.source_url} target="_blank" rel="noopener noreferrer"
-              className="text-center text-xs bg-gray-800 hover:bg-gray-700 rounded py-2 text-blue-400">
-              Ver publicación original →
-            </a>
+              ))}
+            </div>
           </div>
         )}
 

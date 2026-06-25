@@ -11,11 +11,16 @@ from pathlib import Path
 API_URL = os.environ.get("API_URL", "http://localhost:8000")
 
 SEARCH_QUERIES = [
-    "terremoto Venezuela 2026 daños",
-    "sismo Venezuela edificios afectados",
-    "Venezuela earthquake damage 2026",
-    "temblor Venezuela zona afectada",
+    "terremoto Venezuela junio 2026",
+    "sismo Venezuela 24 junio 2026 daños",
+    "Venezuela earthquake June 2026 damage",
+    "temblor Venezuela Yumare San Felipe 2026",
+    "Venezuela 7.5 earthquake 2026",
+    "terremoto Venezuela edificios derrumbe 2026",
 ]
+
+# Only ingest videos uploaded on or after this date
+DATE_AFTER = "20260624"
 
 VENEZUELA_LOCATIONS = {
     "caracas": (10.4806, -66.9036),
@@ -41,25 +46,32 @@ def extract_location(text: str) -> tuple[str | None, float | None, float | None]
     return None, None, None
 
 
-def search_youtube(query: str, max_results: int = 10) -> list[dict]:
-    with tempfile.TemporaryDirectory() as tmp:
-        result = subprocess.run(
-            [
-                "/opt/homebrew/Caskroom/miniforge/base/envs/agent/bin/yt-dlp",
-                f"ytsearch{max_results}:{query}",
-                "--dump-json", "--flat-playlist",
-                "--no-download",
-            ],
-            capture_output=True, text=True, timeout=60,
-            env={**os.environ, "PATH": "/opt/homebrew/bin:" + os.environ.get("PATH", "")},
-        )
-        videos = []
-        for line in result.stdout.strip().splitlines():
-            try:
-                videos.append(json.loads(line))
-            except Exception:
-                pass
-        return videos
+def search_youtube(query: str, max_results: int = 15) -> list[dict]:
+    yt_dlp = "/opt/homebrew/Caskroom/miniforge/base/envs/agent/bin/yt-dlp"
+    result = subprocess.run(
+        [
+            yt_dlp,
+            f"ytsearch{max_results}:{query}",
+            "--dump-json", "--flat-playlist", "--no-download",
+            "--dateafter", DATE_AFTER,
+        ],
+        capture_output=True, text=True, timeout=60,
+        env={**os.environ, "PATH": "/opt/homebrew/bin:" + os.environ.get("PATH", "")},
+    )
+    videos = []
+    for line in result.stdout.strip().splitlines():
+        try:
+            videos.append(json.loads(line))
+        except Exception:
+            pass
+    return videos
+
+
+def is_recent(video: dict) -> bool:
+    upload_date = video.get("upload_date", "")
+    if not upload_date or len(upload_date) != 8:
+        return True  # can't tell, include it
+    return upload_date >= DATE_AFTER
 
 
 def push_report(video: dict) -> bool:
@@ -106,8 +118,9 @@ def main():
     for query in SEARCH_QUERIES:
         print(f"  Searching: {query}")
         videos = search_youtube(query)
-        print(f"    Got {len(videos)} videos")
-        for v in videos:
+        recent = [v for v in videos if is_recent(v)]
+        print(f"    Got {len(videos)} videos, {len(recent)} from 2026-06-24+")
+        for v in recent:
             if push_report(v):
                 total += 1
     print(f"[youtube scraper] Done — {total} reports pushed")

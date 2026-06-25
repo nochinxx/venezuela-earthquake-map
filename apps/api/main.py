@@ -74,6 +74,24 @@ def reports_geojson(
     return {"type": "FeatureCollection", "features": features}
 
 
+@app.get("/reports/nearby")
+def reports_nearby(
+    lat: float = Query(...),
+    lng: float = Query(...),
+    radius_km: float = Query(25.0),
+    limit: int = Query(50, le=200),
+):
+    """All reports within radius_km of a point — shown in the side panel."""
+    deg = radius_km / 111.0
+    result = supabase.table("reports").select(
+        "id,source,source_url,author,text_content,media_urls,"
+        "lat,lng,location_name,damage_level,post_time"
+    ).gte("lat", lat - deg).lte("lat", lat + deg)\
+     .gte("lng", lng - deg).lte("lng", lng + deg)\
+     .order("post_time", desc=True).limit(limit).execute()
+    return result.data or []
+
+
 @app.get("/reports/stats")
 def reports_stats():
     result = supabase.table("reports").select("source", count="exact").execute()
