@@ -165,39 +165,39 @@ const EMERGENCY_DIR = [
 
 const WALKTHROUGH_STEPS = [
   {
+    icon: "🗂️",
+    title: "Capas del mapa",
+    desc: "La barra inferior tiene todas las capas: Reportes (heatmap de redes sociales), Desaparecidos (puntos violetas), Acopios (centros de donación) y Edificios (daño estructural verificado). Actívalas o desactívalas con un toque.",
+  },
+  {
     icon: "🌡️",
-    title: "Mapa de calor",
-    desc: "Cada zona roja representa reportes de daños. El color más intenso indica mayor concentración de reportes en esa área. Los clústeres rojos agrupan varios reportes cercanos.",
+    title: "Reportes en tiempo real",
+    desc: "El heatmap rojo agrega videos de YouTube, tweets e Instagram cada 10 minutos. Filtra por fuente con los sub-filtros YT · X · IG. Haz clic en cualquier zona para ver los reportes individuales.",
   },
   {
-    icon: "📍",
-    title: "Haz clic en el mapa",
-    desc: "Toca cualquier punto o clúster para ver los reportes individuales de esa zona en el panel derecho. Incluye videos de YouTube, tweets, posts de Instagram y comentarios.",
+    icon: "🏚️",
+    title: "Edificios afectados",
+    desc: "Los puntos ámbar son edificios verificados de terremotovenezuela.com: 🔴 derrumbe total, 🟠 daño severo, 🟡 daño parcial. Haz clic para ver la ficha completa con fotos y fuente.",
   },
   {
-    icon: "🔎",
-    title: "Filtra por fuente",
-    desc: "Usa los botones en la barra superior para ver solo reportes de YouTube, X/Twitter o Instagram. El panel de reportes también se actualiza con el filtro activo.",
+    icon: "🧍",
+    title: "Desaparecidos",
+    desc: "Los clústeres violetas consolidan +9.500 reportes de desaparecidos de desaparecidosterremotovenezuela.com y venezulatebusca.com. El panel lateral 'Personas' permite buscar por nombre.",
   },
   {
     icon: "📦",
     title: "Centros de acopio",
-    desc: "Los puntos verdes 📦 son centros de recolección de donaciones verificados. Haz clic en uno para ver la dirección, estado y qué artículos aceptan.",
+    desc: "Los puntos verdes 📦 son centros de donación verificados. Haz clic para ver dirección, horario y qué artículos aceptan.",
   },
   {
-    icon: "🧍",
-    title: "Personas desaparecidas",
-    desc: "Usa '🧍 Desaparecidos' para reportar una persona que no has podido contactar desde el terremoto. Los reportes aparecen como marcadores naranjas en el mapa.",
-  },
-  {
-    icon: "⏱️",
-    title: "Actualización automática",
-    desc: "El mapa se alimenta de YouTube, X/Twitter e Instagram cada 10 minutos. Recarga la página para ver lo más reciente. Las cifras de víctimas se actualizan desde fuentes verificadas.",
+    icon: "🔗",
+    title: "Consolida 5 fuentes",
+    desc: "SismoVenezuela agrega datos de desaparecidosterremotovenezuela.com, venezulatebusca.com, terremotovenezuela.com, terremotovenezuela.app y redes sociales. Cada dato enlaza a su fuente original.",
   },
   {
     icon: "📞",
-    title: "Números de emergencia",
-    desc: "En la esquina inferior izquierda siempre están visibles los números de emergencia: 911 (nacional), 166 (Protección Civil), 167 (Bomberos).",
+    title: "Emergencias",
+    desc: "Esquina inferior izquierda: 911 (emergencias), 166 (Protección Civil), 167 (Bomberos). El panel lateral también muestra el directorio completo de organismos de respuesta.",
   },
 ];
 
@@ -1230,9 +1230,45 @@ export default function Home() {
           </>
         )}
 
+        {/* Stats card */}
+        <div className="absolute top-3 left-3 z-10 max-w-[200px] flex flex-col gap-2">
+          <div className="bg-gray-900/95 border border-gray-700 rounded-lg px-3 py-2 flex flex-col gap-1.5">
+            <p className="text-gray-500 text-[10px] uppercase tracking-wide font-semibold">Resumen · 25 jun</p>
+            <div className="flex flex-col gap-1">
+              {casualties?.deaths != null && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-gray-400 text-xs">Fallecidos</span>
+                  <span className="text-red-400 font-bold text-xs">{casualties.deaths.toLocaleString()}</span>
+                </div>
+              )}
+              {casualties?.injured != null && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-gray-400 text-xs">Heridos</span>
+                  <span className="text-orange-400 font-bold text-xs">{casualties.injured.toLocaleString()}+</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-gray-400 text-xs">Desaparecidos</span>
+                <span className="text-violet-400 font-bold text-xs">{missingPanelTotal > 0 ? missingPanelTotal.toLocaleString() : "—"}</span>
+              </div>
+              {buildingCount != null && buildingCount > 0 && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-gray-400 text-xs">Edificios</span>
+                  <span className="text-amber-400 font-bold text-xs">{buildingCount}</span>
+                </div>
+              )}
+            </div>
+            {casualties?.source_url && (
+              <a href={casualties.source_url} target="_blank" rel="noopener noreferrer"
+                className="text-gray-600 text-[10px] hover:text-gray-400 truncate">
+                {casualties.source_name} →
+              </a>
+            )}
+          </div>
+
         {/* Yummy emergency service card — time-sensitive 24-25 Jun */}
         {showYummyCard && (
-          <div className="absolute top-3 left-3 z-10 max-w-[220px]">
+          <div className="max-w-[200px]">
             <div className="relative flex flex-col gap-1 bg-green-950/95 border border-green-700 rounded-lg px-3 py-2.5">
               <button
                 onClick={() => setShowYummyCard(false)}
@@ -1251,6 +1287,7 @@ export default function Home() {
             </div>
           </div>
         )}
+        </div>{/* end stats+yummy column */}
 
         <div className="absolute bottom-4 left-3 flex flex-col gap-2 z-10 max-w-[180px] md:max-w-none">
           {/* Emergency box — collapsed pill on mobile, full on desktop */}
