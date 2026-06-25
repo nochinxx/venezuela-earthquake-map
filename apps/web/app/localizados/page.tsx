@@ -260,7 +260,15 @@ export default function LocalizadosPage() {
                         <p className="font-semibold text-white text-sm">{p.name}</p>
                         {p.age && <p className="text-gray-500 text-xs">{p.age} años</p>}
                         {p.last_seen_location && <p className="text-gray-400 text-xs">📍 {p.last_seen_location}</p>}
-                        <p className="text-cyan-400 text-[10px] font-medium mt-0.5">🔍 Cruce de datos por SismoVenezuela</p>
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                          <p className="text-cyan-400 text-[10px] font-medium">🔍 Cruce SismoVenezuela</p>
+                          {p.source2_url && (
+                            <a href={p.source2_url} target="_blank" rel="noopener noreferrer"
+                              className="text-cyan-500 text-xs hover:text-cyan-300 hover:underline font-medium">
+                              Ver lista hospitalaria ↗
+                            </a>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -285,13 +293,25 @@ export default function LocalizadosPage() {
                       <p className="font-semibold text-white text-sm">{p.name}</p>
                       {p.age && <p className="text-gray-500 text-xs">{p.age} años</p>}
                       {p.last_seen_location && <p className="text-gray-400 text-xs">📍 {p.last_seen_location}</p>}
-                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <div className="flex flex-col gap-1 mt-1">
                         {byUs
                           ? <p className="text-cyan-400 text-[10px] font-medium">🔍 Cruce SismoVenezuela</p>
-                          : <p className="text-green-500 text-[10px]">Fuente: {badge}</p>
+                          : (() => {
+                              const isDesap = String(p.external_source ?? "").includes("desaparecidos");
+                              const platformUrl = isDesap ? "https://desaparecidosterremotovenezuela.com" : "https://venezulatebusca.com";
+                              return (
+                                <a href={platformUrl} target="_blank" rel="noopener noreferrer"
+                                  className="text-green-500 text-[10px] hover:text-green-300 hover:underline">
+                                  📋 {badge} ↗
+                                </a>
+                              );
+                            })()
                         }
                         {p.source2_url && (
-                          <a href={p.source2_url} target="_blank" rel="noopener noreferrer" className="text-gray-500 text-[10px] hover:text-gray-300">ver fuente ↗</a>
+                          <a href={p.source2_url} target="_blank" rel="noopener noreferrer"
+                            className={`text-xs font-medium hover:underline ${byUs ? "text-cyan-500 hover:text-cyan-300" : "text-blue-400 hover:text-blue-200"}`}>
+                            Ver reporte original ↗
+                          </a>
                         )}
                       </div>
                     </div>
