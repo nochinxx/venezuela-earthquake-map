@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
 // POST /api/reports/[id] — flag as fake news
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const { id } = params;
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
 
   // Increment flag_count and auto-hide at threshold 3
   const { data: current } = await supabase
@@ -27,14 +27,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 // DELETE /api/reports/[id] — admin removal (requires Authorization: Bearer <SUPABASE_SERVICE_KEY>)
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const auth = req.headers.get("authorization") ?? "";
   const token = auth.replace("Bearer ", "").trim();
   if (token !== process.env.SUPABASE_SERVICE_KEY) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const { error } = await supabase.from("reports").update({ hidden: true }).eq("id", params.id);
+  const { error } = await supabase.from("reports").update({ hidden: true }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

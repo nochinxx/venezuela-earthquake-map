@@ -172,11 +172,14 @@ def whisper_transcribe(url: str, tmpdir: str, duration_limit: int = 600) -> str 
 
 
 def geo_from_text(text: str) -> tuple:
-    """Keyword then Gemma location extraction from plain text."""
-    loc, lat, lng = keyword_location(text)
-    if not loc:
-        loc, lat, lng = gemma_location(text)
-    return loc, lat, lng
+    """Gemma-first location extraction. Keyword match as fast pre-check."""
+    # Quick keyword pass — if found, still confirm with Gemma for accuracy
+    kw_loc, kw_lat, kw_lng = keyword_location(text)
+    loc, lat, lng = gemma_location(text)
+    if loc and loc.lower() not in GENERIC:
+        return loc, lat, lng
+    # Gemma found nothing or only generic — fall back to keyword
+    return kw_loc, kw_lat, kw_lng
 
 
 def process_instagram():
