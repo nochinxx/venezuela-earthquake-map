@@ -822,16 +822,12 @@ export default function Home() {
                 Consolida 5 fuentes
               </button>
             </div>
-            {stats && (
-              <p className="text-gray-500 text-xs">
-                <span className="text-gray-300 font-semibold">{stats.total}</span> reportes
-                <span className="hidden sm:inline text-gray-600">
-                  {stats.by_source && Object.entries(stats.by_source).map(([s, n]) => (
-                    <span key={s} className="ml-2">{s}: {n}</span>
-                  ))}
-                </span>
-              </p>
-            )}
+            <p className="text-gray-600 text-[10px] flex items-center gap-1.5">
+              {stats && <><span className="text-gray-400 font-semibold">{stats.total}</span> reportes · </>}
+              <a href="https://x.com/mariojllesca" target="_blank" rel="noopener noreferrer" className="hover:text-gray-400 transition-colors">@mariojllesca</a>
+              <span>·</span>
+              <a href="https://github.com/nochinxx/venezuela-earthquake-map" target="_blank" rel="noopener noreferrer" className="hover:text-gray-400 transition-colors">GitHub</a>
+            </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
@@ -1700,10 +1696,16 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="border-t border-gray-800 pt-3">
+              <div className="border-t border-gray-800 pt-3 flex flex-col gap-1.5">
                 <p className="text-gray-600 text-xs text-center">
                   ¿Tienes una plataforma de respuesta? Escríbenos para ser incluidos.
                   Todos los datos son de voluntarios — verifica siempre con autoridades oficiales.
+                </p>
+                <p className="text-gray-600 text-xs text-center">
+                  Construido por{" "}
+                  <a href="https://x.com/mariojllesca" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">@mariojllesca</a>
+                  {" · "}
+                  <a href="https://github.com/nochinxx/venezuela-earthquake-map" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">Código abierto en GitHub</a>
                 </p>
               </div>
             </div>
