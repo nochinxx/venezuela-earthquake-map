@@ -49,3 +49,23 @@ CREATE POLICY "public_read" ON reports
 
 CREATE POLICY "service_role_write" ON reports
   FOR ALL USING (auth.role() = 'service_role');
+
+-- Casualty statistics from verified sources
+CREATE TABLE IF NOT EXISTS casualty_stats (
+  id          serial PRIMARY KEY,
+  deaths      integer,
+  injured     integer,
+  missing     integer,
+  source_name text NOT NULL,
+  source_url  text,
+  auto_extracted boolean NOT NULL DEFAULT true,
+  scraped_at  timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE casualty_stats ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "public_read_stats" ON casualty_stats
+  FOR SELECT USING (true);
+
+CREATE POLICY "service_role_write_stats" ON casualty_stats
+  FOR ALL USING (auth.role() = 'service_role');

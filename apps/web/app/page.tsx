@@ -54,6 +54,7 @@ export default function Home() {
   const [selected, setSelected] = useState<Report[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [stats, setStats] = useState<{ total: number; by_source: Record<string, number> } | null>(null);
+  const [casualties, setCasualties] = useState<{ deaths: number | null; injured: number | null; missing: number | null; source_name: string; source_url: string | null; scraped_at: string } | null>(null);
   const [source, setSource] = useState<SourceFilter>("");
   const [sort, setSort] = useState<SortOrder>("newest");
   const [panelSort, setPanelSort] = useState<SortOrder>("newest");
@@ -69,6 +70,7 @@ export default function Home() {
   function loadData() {
     const p = new URLSearchParams();
     if (source) p.set("source", source);
+    fetch(`${API}/casualties`).then((r) => r.json()).then((c) => { if (c) setCasualties(c); }).catch(() => {});
     Promise.all([
       fetch(`${API}/reports/geojson?${p}`).then((r) => r.json()),
       fetch(`${API}/reports/stats`).then((r) => r.json()),
@@ -204,6 +206,27 @@ export default function Home() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-gray-950 text-white">
+      {casualties && (casualties.deaths != null || casualties.injured != null) && (
+        <div className="bg-red-950 border-b border-red-800 px-4 py-2 flex items-center gap-4 flex-wrap shrink-0">
+          <span className="text-red-300 font-bold text-sm uppercase tracking-wide">Cifras oficiales</span>
+          {casualties.deaths != null && (
+            <span className="text-white font-bold">{casualties.deaths} <span className="text-red-300 font-normal">muertos</span></span>
+          )}
+          {casualties.injured != null && (
+            <span className="text-white font-bold">{casualties.injured} <span className="text-red-300 font-normal">heridos</span></span>
+          )}
+          {casualties.missing != null && (
+            <span className="text-white font-bold">{casualties.missing} <span className="text-red-300 font-normal">desaparecidos</span></span>
+          )}
+          <span className="text-red-400 text-xs ml-auto">
+            {casualties.source_url
+              ? <a href={casualties.source_url} target="_blank" rel="noopener noreferrer" className="underline hover:text-red-200">{casualties.source_name}</a>
+              : casualties.source_name
+            }
+            {" · "}{timeAgo(casualties.scraped_at)}
+          </span>
+        </div>
+      )}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 shrink-0 flex-wrap gap-2">
         <div>
           <h1 className="font-bold text-red-400 text-lg leading-tight">🇻🇪 Venezuela Earthquake Map</h1>

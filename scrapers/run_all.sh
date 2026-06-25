@@ -22,9 +22,12 @@ $CONDA scrapers/twitter_search.py >> "$LOG" 2>&1 || echo "[twitter] FAILED (exit
 echo "[instagram]" >> "$LOG"
 $CONDA scrapers/instagram_search.py >> "$LOG" 2>&1 || echo "[instagram] FAILED (exit $?)" >> "$LOG"
 
-# Transcription runs every 3rd cycle (~30 min) — subtitles take time to generate
+# Transcription + casualties run every 3rd cycle (~30 min)
 MINUTE=$(date +%M)
 if [ "$MINUTE" -lt 10 ] || { [ "$MINUTE" -gt 40 ] && [ "$MINUTE" -lt 50 ]; }; then
     echo "[transcribe]" >> "$LOG"
     $CONDA scrapers/transcribe_youtube.py >> "$LOG" 2>&1 || echo "[transcribe] FAILED (exit $?)" >> "$LOG"
+
+    echo "[casualties]" >> "$LOG"
+    $CONDA scrapers/casualties.py >> "$LOG" 2>&1 || echo "[casualties] FAILED (exit $?)" >> "$LOG"
 fi
