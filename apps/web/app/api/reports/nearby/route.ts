@@ -9,13 +9,19 @@ export async function GET(req: NextRequest) {
 
   const deg = radiusKm / 111.0;
 
-  const { data, error } = await supabase
+  const sourceFilter = searchParams.get("source") ?? "";
+
+  let query = supabase
     .from("reports")
     .select("id,source,source_url,author,text_content,media_urls,lat,lng,location_name,damage_level,post_time")
     .gte("lat", lat - deg).lte("lat", lat + deg)
     .gte("lng", lng - deg).lte("lng", lng + deg)
     .order("post_time", { ascending: false })
     .limit(100);
+
+  if (sourceFilter) query = query.eq("source", sourceFilter);
+
+  const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data ?? []);

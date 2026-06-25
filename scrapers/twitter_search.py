@@ -24,6 +24,10 @@ PROFILE_DIR = Path.home() / "agent" / "browser-profile"
 SEARCHES = [
     "#TemblorVenezuela",
     "#SismoVenezuela",
+    "#Terremoto Venezuela",
+    "#24Jun sismo Venezuela",
+    "La Guaira terremoto 2026",
+    "San Bernardino sismo daños 2026",
     "terremoto Venezuela daños junio 2026",
     "sismo Venezuela edificio derrumbe 2026",
     "Venezuela earthquake 2026 damage",

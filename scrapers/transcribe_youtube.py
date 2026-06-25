@@ -171,7 +171,38 @@ def whisper_transcribe(url: str, tmpdir: str, duration_limit: int = 600) -> str 
         return None
 
 
+def geo_from_text(text: str) -> tuple:
+    """Keyword then Gemma location extraction from plain text."""
+    loc, lat, lng = keyword_location(text)
+    if not loc:
+        loc, lat, lng = gemma_location(text)
+    return loc, lat, lng
+
+
+def process_instagram():
+    """Run Gemma location extraction on Instagram reports with no location."""
+    rows = sb.table("reports").select("id,text_content,location_name") \
+        .eq("source", "instagram") \
+        .is_("lat", "null") \
+        .execute().data
+    print(f"[transcribe:instagram] {len(rows)} posts without location")
+    updated = 0
+    for row in rows[:40]:
+        text = row.get("text_content", "") or ""
+        if not text.strip():
+            continue
+        loc, lat, lng = geo_from_text(text)
+        if loc and loc.lower() not in GENERIC:
+            sb.table("reports").update({"location_name": loc, "lat": lat, "lng": lng}).eq("id", row["id"]).execute()
+            print(f"  → {loc} ({lat:.4f}, {lng:.4f})")
+            updated += 1
+    print(f"[transcribe:instagram] {updated}/{min(len(rows),40)} updated")
+
+
 def main():
+    # First pass: geo-locate Instagram captions (fast, no audio needed)
+    process_instagram()
+
     rows = sb.table("reports").select("id,source_url,text_content,location_name") \
         .eq("source", "youtube") \
         .execute().data
@@ -180,7 +211,7 @@ def main():
     no_loc = [r for r in rows if not r.get("location_name")]
     caracas = [r for r in rows if r.get("location_name") == "Caracas"]
     targets = no_loc + caracas
-    print(f"[transcribe] {len(targets)} reports to process ({len(no_loc)} no location, {len(caracas)} Caracas)")
+    print(f"[transcribe] {len(targets)} YouTube reports to process ({len(no_loc)} no location, {len(caracas)} Caracas)")
 
     updated = 0
     for i, row in enumerate(targets[:30]):  # cap at 30 per run

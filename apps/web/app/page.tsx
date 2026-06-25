@@ -58,6 +58,10 @@ export default function Home() {
   const [source, setSource] = useState<SourceFilter>("");
   const [sort, setSort] = useState<SortOrder>("newest");
   const [panelSort, setPanelSort] = useState<SortOrder>("newest");
+  const [showSubmit, setShowSubmit] = useState(false);
+  const [submitForm, setSubmitForm] = useState({ url: "", location: "", description: "", damage: "3" });
+  const [submitStatus, setSubmitStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const clickedCoords = useRef<{ lat: number; lng: number } | null>(null);
 
   function sortReports(rows: Report[], order: SortOrder) {
     return [...rows].sort((a, b) => {
@@ -65,6 +69,14 @@ export default function Home() {
       const tb = b.post_time ? new Date(b.post_time).getTime() : 0;
       return order === "newest" ? tb - ta : ta - tb;
     });
+  }
+
+  async function fetchNearby(lat: number, lng: number, radiusKm: number, srcFilter: string) {
+    const p = new URLSearchParams({ lat: String(lat), lng: String(lng), radius_km: String(radiusKm) });
+    if (srcFilter) p.set("source", srcFilter);
+    const res = await fetch(`${API}/reports/nearby?${p}`);
+    const rows: Report[] = await res.json();
+    setSelected(rows.map(r => ({ ...r, media_urls: Array.isArray(r.media_urls) ? r.media_urls : [] })));
   }
 
   function loadData() {
@@ -157,11 +169,9 @@ export default function Home() {
         const feat = e.features?.[0];
         if (!feat) return;
         const [lng, lat] = (feat.geometry as GeoJSON.Point).coordinates;
-        const loc = feat.properties?.location_name ?? null;
-        setSelectedLocation(loc);
-        const res = await fetch(`${API}/reports/nearby?lat=${lat}&lng=${lng}&radius_km=20`);
-        const rows: Report[] = await res.json();
-        setSelected(rows.map(r => ({ ...r, media_urls: Array.isArray(r.media_urls) ? r.media_urls : [] })));
+        clickedCoords.current = { lat, lng };
+        setSelectedLocation(feat.properties?.location_name ?? null);
+        await fetchNearby(lat, lng, 20, source);
       });
 
       m.on("click", "reports-clusters", (e) => {
@@ -172,10 +182,9 @@ export default function Home() {
         src.getClusterLeaves(clusterId, 100, 0, async (_err, leaves) => {
           if (!leaves?.length) return;
           const [lng, lat] = (leaves[0].geometry as GeoJSON.Point).coordinates;
+          clickedCoords.current = { lat, lng };
           setSelectedLocation(leaves[0].properties?.location_name ?? null);
-          const res = await fetch(`${API}/reports/nearby?lat=${lat}&lng=${lng}&radius_km=30`);
-          const rows: Report[] = await res.json();
-          setSelected(rows.map(r => ({ ...r, media_urls: Array.isArray(r.media_urls) ? r.media_urls : [] })));
+          await fetchNearby(lat, lng, 30, source);
         });
       });
 
@@ -200,6 +209,10 @@ export default function Home() {
 
   useEffect(() => {
     if (map.current?.loaded()) loadData();
+    // Re-fetch panel with new filter if it's open
+    if (clickedCoords.current && selected.length > 0) {
+      fetchNearby(clickedCoords.current.lat, clickedCoords.current.lng, 25, source);
+    }
   }, [source]);
 
   const sortedSelected = sortReports(selected, panelSort);
@@ -260,6 +273,11 @@ export default function Home() {
           <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
             className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 hover:bg-gray-700">
             {sort === "newest" ? "↓ Más recientes" : "↑ Más antiguos"}
+          </button>
+
+          <button onClick={() => { setShowSubmit(true); setSubmitStatus("idle"); }}
+            className="px-3 py-0.5 rounded text-xs bg-red-700 hover:bg-red-600 text-white font-semibold">
+            + Reportar daño
           </button>
         </div>
       </div>
@@ -344,6 +362,89 @@ export default function Home() {
           ))}
         </div>
       </div>
+
+      {/* Submit report modal */}
+      {showSubmit && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md p-6 flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h2 className="font-bold text-white text-lg">Reportar daño</h2>
+              <button onClick={() => setShowSubmit(false)} className="text-gray-500 hover:text-white text-2xl leading-none">×</button>
+            </div>
+            <p className="text-gray-400 text-xs">¿Viste daños? Comparte el enlace y nosotros extraemos la ubicación y la añadimos al mapa.</p>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Enlace (tweet, IG, video, noticia) *</label>
+                <input value={submitForm.url} onChange={e => setSubmitForm(f => ({ ...f, url: e.target.value }))}
+                  placeholder="https://..."
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500" />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Ciudad / zona afectada</label>
+                <input value={submitForm.location} onChange={e => setSubmitForm(f => ({ ...f, location: e.target.value }))}
+                  placeholder="Ej: Valencia, Carabobo"
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500" />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Descripción (opcional)</label>
+                <textarea value={submitForm.description} onChange={e => setSubmitForm(f => ({ ...f, description: e.target.value }))}
+                  rows={3} placeholder="¿Qué pasó? ¿Hay heridos, daños estructurales?"
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500 resize-none" />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Nivel de daño</label>
+                <div className="flex gap-2">
+                  {([1,2,3,4,5] as const).map(n => (
+                    <button key={n} onClick={() => setSubmitForm(f => ({ ...f, damage: String(n) }))}
+                      className={`flex-1 py-1 rounded text-xs font-medium border transition-colors ${
+                        submitForm.damage === String(n)
+                          ? "border-red-500 text-white"
+                          : "border-gray-700 text-gray-500 hover:border-gray-500"
+                      }`}
+                      style={submitForm.damage === String(n) ? { background: DAMAGE_COLOR[n] + "33", borderColor: DAMAGE_COLOR[n] } : {}}>
+                      {n} {DAMAGE_LABEL[n]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <button
+              disabled={!submitForm.url || submitStatus === "sending"}
+              onClick={async () => {
+                setSubmitStatus("sending");
+                const LOCATIONS_MAP: Record<string, [number, number]> = {
+                  "caracas": [10.4806, -66.9036], "valencia": [10.162, -67.9903],
+                  "maracaibo": [10.6316, -71.6428], "barquisimeto": [10.0647, -69.3571],
+                  "maracay": [10.2469, -67.5958], "yumare": [10.6383, -68.6847],
+                  "san felipe": [10.3394, -68.7453], "la guaira": [10.6013, -66.9337],
+                  "cumana": [10.4574, -64.1744], "merida": [8.5916, -71.144],
+                  "carabobo": [10.162, -67.9903], "miranda": [10.3, -66.6],
+                };
+                const locKey = submitForm.location.toLowerCase().trim();
+                const match = Object.entries(LOCATIONS_MAP).find(([k]) => locKey.includes(k) || k.includes(locKey));
+                const [lat, lng] = match ? match[1] : [null, null];
+                const payload = {
+                  source: "web",
+                  source_url: submitForm.url,
+                  text_content: submitForm.description || submitForm.location,
+                  location_name: submitForm.location || null,
+                  lat, lng,
+                  damage_level: parseInt(submitForm.damage),
+                };
+                try {
+                  const res = await fetch(`${API}/ingest`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                  setSubmitStatus(res.ok ? "done" : "error");
+                  if (res.ok) { setSubmitForm({ url: "", location: "", description: "", damage: "3" }); setTimeout(() => setShowSubmit(false), 2000); }
+                } catch { setSubmitStatus("error"); }
+              }}
+              className="w-full py-2 rounded bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white font-semibold text-sm transition-colors">
+              {submitStatus === "sending" ? "Enviando..." : submitStatus === "done" ? "¡Reporte enviado!" : submitStatus === "error" ? "Error — intenta de nuevo" : "Enviar reporte"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
