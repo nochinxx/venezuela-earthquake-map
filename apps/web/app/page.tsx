@@ -300,8 +300,10 @@ export default function Home() {
   const [externalMissingTotal, setExternalMissingTotal] = useState<number | null>(null);
   const [externalMissingLoading, setExternalMissingLoading] = useState(false);
   const [selectedExternalPerson, setSelectedExternalPerson] = useState<Record<string, unknown> | null>(null);
-  const [showMissingPanel, setShowMissingPanel] = useState(false);
+  const [panelTab, setPanelTab] = useState<"reports" | "personas" | null>(null);
   const [missingPanelList, setMissingPanelList] = useState<MissingPerson[]>([]);
+  const [missingPanelTotal, setMissingPanelTotal] = useState(0);
+  const [missingPanelOffset, setMissingPanelOffset] = useState(0);
   const [missingPanelLoading, setMissingPanelLoading] = useState(false);
   const [missingSearch, setMissingSearch] = useState("");
   const [missingStatusFilter, setMissingStatusFilter] = useState<"" | "sin-contacto" | "encontrado">("");
@@ -334,6 +336,7 @@ export default function Home() {
     const res = await fetch(`${API}/reports/nearby?${p}`);
     const rows: Report[] = await res.json();
     setSelected(rows.map(r => ({ ...r, media_urls: Array.isArray(r.media_urls) ? r.media_urls : [] })));
+    setPanelTab("reports");
   }
 
   function renderReliefMarkers(centers: ReliefCenter[]) {
@@ -381,7 +384,8 @@ export default function Home() {
       setReliefCenters(centers);
       renderReliefMarkers(centers);
     }).catch(() => {});
-    fetch(`${API}/missing-persons`).then((r) => r.json()).then((persons: MissingPerson[]) => {
+    fetch(`${API}/missing-persons?limit=200`).then((r) => r.json()).then((res: { data: MissingPerson[] }) => {
+      const persons = res.data ?? [];
       setMissingPersons(persons);
       renderMissingMarkers(persons);
     }).catch(() => {});
@@ -573,11 +577,15 @@ export default function Home() {
             const coords = (features[0].geometry as GeoJSON.Point).coordinates as [number, number];
             m.easeTo({ center: coords, zoom });
           });
+          setPanelTab("personas");
         });
 
         m.on("click", LAYER_POINT, (e) => {
           const props = e.features?.[0]?.properties;
-          if (props) setSelectedExternalPerson(props as Record<string, unknown>);
+          if (props) {
+            setSelectedExternalPerson(props as Record<string, unknown>);
+            setPanelTab("personas");
+          }
         });
 
         m.on("mouseenter", LAYER_CLUSTER, () => { m.getCanvas().style.cursor = "pointer"; });
@@ -590,19 +598,41 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showExternalMissing]);
 
-  // Missing persons panel loader
+  // Missing persons panel loader — resets list when filters/search change
   useEffect(() => {
-    if (!showMissingPanel) return;
+    if (panelTab !== "personas") return;
+    setMissingPanelOffset(0);
+    setMissingPanelList([]);
     setMissingPanelLoading(true);
-    const p = new URLSearchParams({ limit: "200" });
+    const p = new URLSearchParams({ limit: "100", offset: "0" });
     if (missingSearch) p.set("q", missingSearch);
     if (missingStatusFilter) p.set("status", missingStatusFilter);
     fetch(`${API}/missing-persons?${p}`)
       .then(r => r.json())
-      .then((rows: MissingPerson[]) => setMissingPanelList(rows))
+      .then((res: { data: MissingPerson[]; total: number }) => {
+        setMissingPanelList(res.data ?? []);
+        setMissingPanelTotal(res.total ?? 0);
+        setMissingPanelOffset(100);
+      })
       .catch(() => {})
       .finally(() => setMissingPanelLoading(false));
-  }, [showMissingPanel, missingSearch, missingStatusFilter]);
+  }, [panelTab, missingSearch, missingStatusFilter]);
+
+  function loadMoreMissing() {
+    setMissingPanelLoading(true);
+    const p = new URLSearchParams({ limit: "100", offset: String(missingPanelOffset) });
+    if (missingSearch) p.set("q", missingSearch);
+    if (missingStatusFilter) p.set("status", missingStatusFilter);
+    fetch(`${API}/missing-persons?${p}`)
+      .then(r => r.json())
+      .then((res: { data: MissingPerson[]; total: number }) => {
+        setMissingPanelList(prev => [...prev, ...(res.data ?? [])]);
+        setMissingPanelTotal(res.total ?? 0);
+        setMissingPanelOffset(prev => prev + 100);
+      })
+      .catch(() => {})
+      .finally(() => setMissingPanelLoading(false));
+  }
 
   // Auto-load source feed when a filter is active and no map location is selected
   useEffect(() => {
@@ -610,7 +640,10 @@ export default function Home() {
     setFeedLoading(true);
     fetch(`${API}/reports/feed?source=${source}&limit=60`)
       .then(r => r.json())
-      .then((rows: Report[]) => setFeed(rows.map(r => ({ ...r, media_urls: Array.isArray(r.media_urls) ? r.media_urls : [] }))))
+      .then((rows: Report[]) => {
+        setFeed(rows.map(r => ({ ...r, media_urls: Array.isArray(r.media_urls) ? r.media_urls : [] })));
+        setPanelTab("reports");
+      })
       .catch(() => {})
       .finally(() => setFeedLoading(false));
   }, [source, selected.length]);
@@ -695,16 +728,16 @@ export default function Home() {
                 className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${showRelief ? "bg-green-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
                 📦 Acopios
               </button>
-              <button onClick={() => setShowMissingPanel(v => !v)}
-                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${showMissingPanel ? "bg-orange-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
-                🧍 Desaparecidos
+              <button onClick={() => setPanelTab(p => p === "personas" ? null : "personas")}
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${panelTab === "personas" ? "bg-violet-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
+                🧍 Desaparecidos {missingPanelTotal > 0 ? `· ${missingPanelTotal.toLocaleString()}` : ""}
               </button>
               <button
-                onClick={() => setShowExternalMissing(v => !v)}
-                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors flex items-center gap-1 ${showExternalMissing ? "bg-violet-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
-                title="Desaparecidos de desaparecidosterremotovenezuela.com"
+                onClick={() => { setShowExternalMissing(v => !v); if (!showExternalMissing) setPanelTab("personas"); }}
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors flex items-center gap-1 ${showExternalMissing ? "bg-violet-800 text-violet-200" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                title="Mostrar marcadores de desaparecidos en el mapa"
               >
-                🔍 {externalMissingLoading ? "..." : externalMissingTotal ? `${externalMissingTotal.toLocaleString()} desap.` : "Desaparecidos"}
+                🗺 {externalMissingLoading ? "..." : externalMissingTotal ? `${externalMissingTotal.toLocaleString()} en mapa` : "Ver en mapa"}
               </button>
             </div>
             {/* Always visible: Reportar + guide */}
@@ -750,13 +783,13 @@ export default function Home() {
               className={`px-3 py-1.5 rounded-full text-xs font-medium ${showRelief ? "bg-green-700 text-white" : "bg-gray-800 text-gray-400"}`}>
               📦 Acopios
             </button>
-            <button onClick={() => { setShowMissingPanel(v => !v); setShowMobileMenu(false); }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium ${showMissingPanel ? "bg-orange-700 text-white" : "bg-orange-800 text-white"}`}>
-              🧍 Desaparecidos
+            <button onClick={() => { setPanelTab(p => p === "personas" ? null : "personas"); setShowMobileMenu(false); }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium ${panelTab === "personas" ? "bg-violet-700 text-white" : "bg-gray-800 text-gray-400"}`}>
+              🧍 Desaparecidos {missingPanelTotal > 0 ? `· ${missingPanelTotal.toLocaleString()}` : ""}
             </button>
-            <button onClick={() => { setShowExternalMissing(v => !v); setShowMobileMenu(false); }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium ${showExternalMissing ? "bg-violet-700 text-white" : "bg-gray-800 text-gray-400"}`}>
-              🔍 {externalMissingTotal ? `${externalMissingTotal.toLocaleString()} desap.` : "Mapa desaparecidos"}
+            <button onClick={() => { setShowExternalMissing(v => !v); if (!showExternalMissing) setPanelTab("personas"); setShowMobileMenu(false); }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium ${showExternalMissing ? "bg-violet-800 text-violet-200" : "bg-gray-800 text-gray-400"}`}>
+              🗺 {externalMissingTotal ? `${externalMissingTotal.toLocaleString()} en mapa` : "Ver en mapa"}
             </button>
             <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
               className="px-3 py-1.5 rounded-full text-xs bg-gray-800 text-gray-400">
@@ -769,311 +802,353 @@ export default function Home() {
       <div className="flex flex-1 overflow-hidden relative">
         <div ref={mapRef} className="flex-1" />
 
-        {/* Source feed panel — shows when a filter is active but no map click */}
-        {feed.length > 0 && selected.length === 0 && (
+        {/* Unified tabbed panel */}
+        {panelTab !== null && (
           <>
           {/* Desktop */}
           <div className="hidden md:flex flex-col absolute right-0 top-0 h-full w-96 bg-gray-900/95 border-l border-gray-800 z-10">
-            <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-4 py-3 shrink-0">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-semibold text-white text-sm capitalize">
-                    {source === "twitter" ? "📢 X / Twitter" : source === "instagram" ? "📸 Instagram" : source === "youtube" ? "▶️ YouTube" : "Feed"}
-                  </p>
-                  <p className="text-gray-400 text-xs">{feed.length} reportes · incluye sin ubicación</p>
-                </div>
-                <button onClick={() => { setSource(""); setFeed([]); }} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
-              </div>
+            {/* Tab bar */}
+            <div className="flex border-b border-gray-800 shrink-0 bg-gray-900">
+              <button onClick={() => setPanelTab("reports")}
+                className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 ${panelTab === "reports" ? "text-red-400 border-red-500" : "text-gray-500 border-transparent hover:text-gray-300"}`}>
+                📢 Reportes{selected.length > 0 ? ` (${selected.length})` : feed.length > 0 ? ` (${feed.length})` : ""}
+              </button>
+              <button onClick={() => setPanelTab("personas")}
+                className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 ${panelTab === "personas" ? "text-violet-400 border-violet-500" : "text-gray-500 border-transparent hover:text-gray-300"}`}>
+                🧍 Personas{missingPanelTotal > 0 ? ` (${missingPanelTotal.toLocaleString()})` : ""}
+              </button>
+              <button onClick={() => { setPanelTab(null); setSelected([]); setSelectedLocation(null); setSelectedExternalPerson(null); }}
+                className="px-3 text-gray-500 hover:text-white text-lg leading-none shrink-0">×</button>
             </div>
-            <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
-              {feedLoading ? (
-                <p className="text-gray-500 text-sm p-4">Cargando...</p>
-              ) : feed.map((r) => <FeedCard key={r.id} r={r} flagged={flagged} setFlagged={setFlagged} api={API} />)}
-            </div>
-          </div>
-          {/* Mobile */}
-          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-900/98 border-t border-gray-800 z-20 flex flex-col max-h-[55vh]">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 shrink-0">
-              <p className="font-semibold text-white text-sm capitalize">
-                {source === "instagram" ? "📸 Instagram" : source === "twitter" ? "📢 X/Twitter" : "▶️ YouTube"}
-                <span className="text-gray-500 font-normal text-xs ml-2">{feed.length} reportes</span>
-              </p>
-              <button onClick={() => { setSource(""); setFeed([]); }} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
-            </div>
-            <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
-              {feed.map((r) => <FeedCard key={`m-${r.id}`} r={r} flagged={flagged} setFlagged={setFlagged} api={API} />)}
-            </div>
-          </div>
-          </>
-        )}
 
-        {/* Missing persons panel */}
-        {showMissingPanel && (
-          <>
-          {/* Desktop */}
-          <div className="hidden md:flex flex-col absolute right-0 top-0 h-full w-96 bg-gray-900/95 border-l border-gray-800 z-10">
-            {/* Header */}
-            <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-4 py-3 shrink-0 flex flex-col gap-2">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-semibold text-white text-sm">🧍 Personas desaparecidas</p>
-                  <p className="text-gray-400 text-xs">{missingPanelLoading ? "Cargando..." : `${missingPanelList.length} registros`}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => { setShowMissing(true); setMissingStatus("idle"); }} className="px-2 py-0.5 rounded text-xs bg-orange-800 hover:bg-orange-700 text-white">+ Reportar</button>
-                  <button onClick={() => setShowMissingPanel(false)} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
-                </div>
-              </div>
-              {/* Search */}
-              <input value={missingSearch} onChange={e => setMissingSearch(e.target.value)} placeholder="Buscar por nombre..."
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
-              {/* Status filter pills */}
-              <div className="flex gap-1">
-                {([["", "Todos"], ["sin-contacto", "Sin contacto"], ["encontrado", "Encontrados"]] as const).map(([val, label]) => (
-                  <button key={val} onClick={() => setMissingStatusFilter(val)}
-                    className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${missingStatusFilter === val ? (val === "encontrado" ? "bg-green-700 text-white" : "bg-orange-700 text-white") : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* List */}
-            <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
-              {missingPanelList.map((p) => (
-                <div key={p.id} className="px-4 py-3 flex gap-3 hover:bg-gray-800/50 transition-colors">
-                  {p.photo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.photo_url} alt={p.name} className="w-12 h-12 rounded-lg object-cover shrink-0 border border-gray-700" />
-                  ) : (
-                    <div className="w-12 h-12 rounded-lg bg-gray-800 shrink-0 flex items-center justify-center text-gray-600 text-lg">👤</div>
-                  )}
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="font-semibold text-white text-sm truncate">{p.name}</p>
-                      {p.age ? <span className="text-gray-500 text-xs shrink-0">{p.age} años</span> : null}
-                      <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${p.status === "encontrado" ? "bg-green-900 text-green-300" : "bg-orange-900/50 text-orange-400"}`}>
-                        {p.status === "encontrado" ? "✓ Encontrado" : "Sin contacto"}
-                      </span>
-                    </div>
-                    {p.last_seen_location ? <p className="text-gray-400 text-xs truncate">📍 {p.last_seen_location}</p> : null}
-                    {p.contact_info ? <p className="text-gray-500 text-xs truncate">☎ {p.contact_info}</p> : null}
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {p.external_source && (
-                        <a href={p.source2_url || (p.external_source === "desaparecidos-vzla" ? "https://desaparecidosterremotovenezuela.com" : "https://venezuelatebusca.com")}
-                          target="_blank" rel="noopener noreferrer"
-                          className="text-xs text-violet-400 hover:text-violet-300">
-                          {p.external_source === "venezulatebusca" ? "venezulatebusca.com" : "desaparecidosterremotovenezuela.com"} →
-                        </a>
-                      )}
-                      {p.lat && p.lng && (
-                        <button onClick={() => { map.current?.flyTo({ center: [p.lng!, p.lat!], zoom: 14, duration: 1000 }); setShowMissingPanel(false); }}
-                          className="text-xs text-gray-500 hover:text-gray-300">ver en mapa</button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {!missingPanelLoading && missingPanelList.length === 0 && (
-                <p className="text-gray-500 text-sm p-4 text-center">No se encontraron resultados.</p>
-              )}
-              <div className="p-3 border-t border-gray-800">
-                <p className="text-gray-600 text-xs text-center">Datos de <a href="https://desaparecidosterremotovenezuela.com" className="text-violet-500 hover:text-violet-300" target="_blank" rel="noopener noreferrer">desaparecidosterremotovenezuela.com</a> y <a href="https://venezuelatebusca.com" className="text-violet-500 hover:text-violet-300" target="_blank" rel="noopener noreferrer">venezuelatebusca.com</a></p>
-              </div>
-            </div>
-          </div>
-          {/* Mobile: bottom sheet */}
-          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-900/98 border-t border-gray-800 z-20 flex flex-col max-h-[70vh]">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 shrink-0">
-              <div>
-                <p className="font-semibold text-white text-sm">🧍 Desaparecidos</p>
-                <p className="text-gray-500 text-xs">{missingPanelList.length} registros</p>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => { setShowMissing(true); setMissingStatus("idle"); }} className="px-2 py-0.5 rounded text-xs bg-orange-800 text-white">+ Reportar</button>
-                <button onClick={() => setShowMissingPanel(false)} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
-              </div>
-            </div>
-            <div className="px-3 py-2 shrink-0 flex flex-col gap-2 border-b border-gray-800">
-              <input value={missingSearch} onChange={e => setMissingSearch(e.target.value)} placeholder="Buscar por nombre..."
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none" />
-              <div className="flex gap-1">
-                {([["", "Todos"], ["sin-contacto", "Sin contacto"], ["encontrado", "Encontrados"]] as const).map(([val, label]) => (
-                  <button key={val} onClick={() => setMissingStatusFilter(val)}
-                    className={`px-2 py-0.5 rounded text-xs ${missingStatusFilter === val ? "bg-orange-700 text-white" : "bg-gray-800 text-gray-400"}`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
-              {missingPanelList.map((p) => (
-                <div key={`m-${p.id}`} className="px-3 py-2.5 flex gap-2.5">
-                  {p.photo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.photo_url} alt={p.name} className="w-10 h-10 rounded object-cover shrink-0 border border-gray-700" />
-                  ) : (
-                    <div className="w-10 h-10 rounded bg-gray-800 shrink-0 flex items-center justify-center text-gray-600">👤</div>
-                  )}
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <p className="font-semibold text-white text-sm truncate">{p.name}</p>
-                      {p.age ? <span className="text-gray-500 text-xs">{p.age}a</span> : null}
-                    </div>
-                    {p.last_seen_location ? <p className="text-gray-400 text-xs truncate">📍 {p.last_seen_location}</p> : null}
-                    <span className={`text-xs px-1 py-0.5 rounded w-fit ${p.status === "encontrado" ? "bg-green-900 text-green-300" : "bg-orange-900/50 text-orange-400"}`}>
-                      {p.status === "encontrado" ? "✓" : "Sin contacto"}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          </>
-        )}
-
-        {selected.length > 0 && (
-          <>
-          {/* Desktop: right side panel */}
-          <div className="hidden md:block absolute right-0 top-0 h-full w-96 bg-gray-900/95 border-l border-gray-800 overflow-y-auto z-10">
-            <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-4 py-3">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-semibold text-white text-sm">📍 {selectedLocation ?? "Zona afectada"}</p>
-                  <p className="text-gray-400 text-xs">{selected.length} reporte{selected.length !== 1 ? "s" : ""}</p>
-                </div>
-                <button onClick={() => { setSelected([]); setSelectedLocation(null); }} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
-              </div>
-              <div className="flex gap-1 mt-2">
-                <button onClick={() => setPanelSort("newest")} className={`px-2 py-0.5 rounded text-xs ${panelSort === "newest" ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400"}`}>↓ Recientes</button>
-                <button onClick={() => setPanelSort("oldest")} className={`px-2 py-0.5 rounded text-xs ${panelSort === "oldest" ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400"}`}>↑ Antiguos</button>
-              </div>
-            </div>
-            <div className="flex flex-col divide-y divide-gray-800">
-              {sortedSelected.map((r) => (
-                <div key={r.id} className={`p-4 flex flex-col gap-2 ${r.is_comment ? "bg-gray-950/60" : ""}`}>
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-1.5">
-                      {r.is_comment ? (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-800 text-gray-400">
-                          💬 comentario
-                        </span>
-                      ) : (
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${
-                          r.source === "twitter" ? "bg-blue-900 text-blue-300" :
-                          r.source === "instagram" ? "bg-pink-900 text-pink-300" :
-                          r.source === "web" ? "bg-green-900 text-green-300" :
-                          "bg-red-900 text-red-300"
-                        }`}>{r.source}</span>
-                      )}
-                      {r.credibility === "low" && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-500 border border-yellow-800">
-                          baja confiabilidad
-                        </span>
-                      )}
-                      {r.credibility === "high" && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-green-900/50 text-green-400 border border-green-800">
-                          verificado
-                        </span>
-                      )}
-                    </div>
-                    {r.damage_level && (
-                      <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full" style={{ background: DAMAGE_COLOR[r.damage_level] }} />
-                        <span className="text-xs text-gray-400">{DAMAGE_LABEL[r.damage_level]}</span>
+            {/* Reports tab */}
+            {panelTab === "reports" && (
+              <div className="flex flex-col flex-1 overflow-hidden">
+                {selected.length > 0 && (
+                  <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 shrink-0">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold text-white text-sm">📍 {selectedLocation ?? "Zona afectada"}</p>
+                        <p className="text-gray-400 text-xs">{selected.length} reporte{selected.length !== 1 ? "s" : ""}</p>
                       </div>
-                    )}
+                      <div className="flex gap-1">
+                        <button onClick={() => setPanelSort("newest")} className={`px-2 py-0.5 rounded text-xs ${panelSort === "newest" ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400"}`}>↓ Recientes</button>
+                        <button onClick={() => setPanelSort("oldest")} className={`px-2 py-0.5 rounded text-xs ${panelSort === "oldest" ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400"}`}>↑ Antiguos</button>
+                      </div>
+                    </div>
                   </div>
-
-                  {r.text_content && (
-                    <p className={`text-sm leading-relaxed ${r.is_comment ? "text-gray-400 italic" : "text-gray-300"}`}>
-                      {r.text_content}
-                    </p>
+                )}
+                {feed.length > 0 && selected.length === 0 && (
+                  <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 shrink-0 flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-white text-sm capitalize">
+                        {source === "twitter" ? "📢 X / Twitter" : source === "instagram" ? "📸 Instagram" : "▶️ YouTube"}
+                      </p>
+                      <p className="text-gray-400 text-xs">{feed.length} reportes · incluye sin ubicación</p>
+                    </div>
+                    <button onClick={() => { setSource(""); setFeed([]); }} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+                  </div>
+                )}
+                <div className="overflow-y-auto flex flex-col divide-y divide-gray-800 flex-1">
+                  {selected.length > 0 ? sortedSelected.map((r) => (
+                    <div key={r.id} className={`p-4 flex flex-col gap-2 ${r.is_comment ? "bg-gray-950/60" : ""}`}>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          {r.is_comment ? (
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-800 text-gray-400">💬 comentario</span>
+                          ) : (
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${r.source === "twitter" ? "bg-blue-900 text-blue-300" : r.source === "instagram" ? "bg-pink-900 text-pink-300" : r.source === "web" ? "bg-green-900 text-green-300" : "bg-red-900 text-red-300"}`}>{r.source}</span>
+                          )}
+                          {r.credibility === "low" && <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-500 border border-yellow-800">baja confiabilidad</span>}
+                          {r.credibility === "high" && <span className="text-xs px-1.5 py-0.5 rounded bg-green-900/50 text-green-400 border border-green-800">verificado</span>}
+                        </div>
+                        {r.damage_level && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 rounded-full" style={{ background: DAMAGE_COLOR[r.damage_level] }} />
+                            <span className="text-xs text-gray-400">{DAMAGE_LABEL[r.damage_level]}</span>
+                          </div>
+                        )}
+                      </div>
+                      {r.text_content && <p className={`text-sm leading-relaxed ${r.is_comment ? "text-gray-400 italic" : "text-gray-300"}`}>{r.text_content}</p>}
+                      {r.is_comment && r.parent_url && <a href={r.parent_url} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-600 hover:text-gray-400">Ver video original →</a>}
+                      {!r.is_comment && r.media_urls?.length > 0 && <img src={r.media_urls[0]} alt="media" className="rounded w-full object-cover max-h-40" />}
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500 text-xs">
+                          {r.author ? `@${r.author}` : ""}
+                          {(r.post_time || r.scraped_at) ? ` · ${timeAgo((r.post_time || r.scraped_at)!)}` : ""}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {!r.is_comment && <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300">Ver fuente →</a>}
+                          <button title="Reportar como falso" onClick={async () => {
+                            if (flagged.has(r.id)) return;
+                            await fetch(`${API}/reports/${r.id}`, { method: "POST" });
+                            setFlagged(f => new Set(f).add(r.id));
+                            setSelected(sel => sel.filter(s => s.id !== r.id || (s.flag_count ?? 0) < 2));
+                          }} className={`text-xs transition-colors ${flagged.has(r.id) ? "text-orange-400 cursor-default" : "text-gray-600 hover:text-orange-400"}`}>
+                            {flagged.has(r.id) ? "🚩 reportado" : "🚩"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )) : feed.length > 0 ? (
+                    feedLoading ? <p className="text-gray-500 text-sm p-4">Cargando...</p> :
+                    feed.map((r) => <FeedCard key={r.id} r={r} flagged={flagged} setFlagged={setFlagged} api={API} />)
+                  ) : (
+                    <p className="text-gray-500 text-sm p-6 text-center">Haz clic en el mapa para ver reportes de la zona.</p>
                   )}
+                </div>
+              </div>
+            )}
 
-                  {r.is_comment && r.parent_url && (
-                    <a href={r.parent_url} target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-gray-600 hover:text-gray-400">
-                      Ver video original →
-                    </a>
-                  )}
-
-                  {!r.is_comment && r.media_urls?.length > 0 && (
-                    <img src={r.media_urls[0]} alt="media"
-                      className="rounded w-full object-cover max-h-40" />
-                  )}
-
+            {/* Personas tab */}
+            {panelTab === "personas" && (
+              <div className="flex flex-col flex-1 overflow-hidden">
+                {/* Highlighted person from map click */}
+                {selectedExternalPerson && (() => {
+                  const ep = selectedExternalPerson as { nombre?: string; edad?: number; estado?: string; foto?: string; ubicacion?: string; descripcion?: string; contacto?: string; };
+                  return (
+                    <div className="px-4 py-3 border-b border-violet-800/40 bg-violet-950/20 shrink-0">
+                      <div className="flex items-start gap-3">
+                        {ep.foto
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img src={ep.foto} alt={ep.nombre ?? ""} className="w-14 h-14 rounded-lg object-cover shrink-0 border border-gray-700" />
+                          : null}
+                        <div className="flex-1 min-w-0">
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${ep.estado === "localizado" ? "bg-green-800 text-green-300" : "bg-violet-900 text-violet-300"}`}>
+                            {ep.estado === "localizado" ? "✓ Localizado" : "Sin contacto"}
+                          </span>
+                          <p className="font-bold text-white text-sm mt-1 truncate">{ep.nombre}</p>
+                          {ep.edad ? <p className="text-gray-400 text-xs">{ep.edad} años</p> : null}
+                          {ep.ubicacion ? <p className="text-gray-400 text-xs truncate">📍 {ep.ubicacion}</p> : null}
+                          {ep.descripcion ? <p className="text-gray-500 text-xs line-clamp-2 mt-0.5">{ep.descripcion}</p> : null}
+                          <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer" className="text-xs text-violet-400 hover:text-violet-300 mt-1 inline-block">
+                            desaparecidosterremotovenezuela.com →
+                          </a>
+                        </div>
+                        <button onClick={() => setSelectedExternalPerson(null)} className="text-gray-500 hover:text-white text-lg leading-none shrink-0">×</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+                {/* Search + filters */}
+                <div className="px-4 py-3 border-b border-gray-800 shrink-0 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-500 text-xs">
-                      {r.author ? `@${r.author}` : ""}
-                      {(r.post_time || r.scraped_at) ? ` · ${timeAgo((r.post_time || r.scraped_at)!)}` : ""}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      {!r.is_comment && (
-                        <a href={r.source_url} target="_blank" rel="noopener noreferrer"
-                          className="text-xs text-blue-400 hover:text-blue-300">
-                          Ver fuente →
-                        </a>
+                    <p className="text-gray-400 text-xs">
+                      {missingPanelLoading && missingPanelList.length === 0 ? "Cargando..." : (
+                        <><span className="text-white font-medium">{missingPanelList.length}</span> de <span className="text-white font-medium">{missingPanelTotal.toLocaleString()}</span> registros</>
                       )}
-                      <button
-                        title="Reportar como falso"
-                        onClick={async () => {
-                          if (flagged.has(r.id)) return;
-                          await fetch(`${API}/reports/${r.id}`, { method: "POST" });
-                          setFlagged(f => new Set(f).add(r.id));
-                          setSelected(sel => sel.filter(s => s.id !== r.id || (s.flag_count ?? 0) < 2));
-                        }}
-                        className={`text-xs transition-colors ${flagged.has(r.id) ? "text-orange-400 cursor-default" : "text-gray-600 hover:text-orange-400"}`}>
-                        {flagged.has(r.id) ? "🚩 reportado" : "🚩"}
+                    </p>
+                    <button onClick={() => { setShowMissing(true); setMissingStatus("idle"); }} className="px-2 py-0.5 rounded text-xs bg-orange-800 hover:bg-orange-700 text-white">+ Reportar</button>
+                  </div>
+                  <input value={missingSearch} onChange={e => setMissingSearch(e.target.value)} placeholder="Buscar por nombre..."
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500" />
+                  <div className="flex gap-1">
+                    {([["", "Todos"], ["sin-contacto", "Sin contacto"], ["encontrado", "Encontrados"]] as const).map(([val, label]) => (
+                      <button key={val} onClick={() => setMissingStatusFilter(val)}
+                        className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${missingStatusFilter === val ? (val === "encontrado" ? "bg-green-700 text-white" : "bg-violet-700 text-white") : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* List */}
+                <div className="overflow-y-auto flex flex-col divide-y divide-gray-800 flex-1">
+                  {missingPanelList.map((p) => (
+                    <div key={p.id} className="px-4 py-3 flex gap-3 hover:bg-gray-800/50 transition-colors">
+                      {p.photo_url
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={p.photo_url} alt={p.name} className="w-12 h-12 rounded-lg object-cover shrink-0 border border-gray-700" />
+                        : <div className="w-12 h-12 rounded-lg bg-gray-800 shrink-0 flex items-center justify-center text-gray-600 text-lg">👤</div>}
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-semibold text-white text-sm truncate">{p.name}</p>
+                          {p.age ? <span className="text-gray-500 text-xs shrink-0">{p.age} años</span> : null}
+                          <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${p.status === "encontrado" ? "bg-green-900 text-green-300" : "bg-orange-900/50 text-orange-400"}`}>
+                            {p.status === "encontrado" ? "✓ Encontrado" : "Sin contacto"}
+                          </span>
+                        </div>
+                        {p.last_seen_location ? <p className="text-gray-400 text-xs truncate">📍 {p.last_seen_location}</p> : null}
+                        {p.contact_info ? <p className="text-gray-500 text-xs truncate">☎ {p.contact_info}</p> : null}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {p.external_source && (
+                            <a href={p.source2_url || (p.external_source === "desaparecidos-vzla" ? "https://desaparecidosterremotovenezuela.com" : "https://venezuelatebusca.com")}
+                              target="_blank" rel="noopener noreferrer" className="text-xs text-violet-400 hover:text-violet-300">
+                              {p.external_source === "venezulatebusca" ? "venezulatebusca.com" : "desaparecidos.com"} →
+                            </a>
+                          )}
+                          {p.lat && p.lng && (
+                            <button onClick={() => { map.current?.flyTo({ center: [p.lng!, p.lat!], zoom: 14, duration: 1000 }); setPanelTab(null); }}
+                              className="text-xs text-gray-500 hover:text-gray-300">ver en mapa</button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {!missingPanelLoading && missingPanelList.length === 0 && (
+                    <p className="text-gray-500 text-sm p-4 text-center">No se encontraron resultados.</p>
+                  )}
+                  {missingPanelList.length > 0 && missingPanelList.length < missingPanelTotal && (
+                    <div className="p-3 flex justify-center">
+                      <button onClick={loadMoreMissing} disabled={missingPanelLoading}
+                        className="px-4 py-2 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium disabled:opacity-50">
+                        {missingPanelLoading ? "Cargando..." : `Cargar más (${missingPanelTotal - missingPanelList.length} restantes)`}
                       </button>
                     </div>
+                  )}
+                  <div className="p-3 border-t border-gray-800">
+                    <p className="text-gray-600 text-xs text-center">
+                      <a href="https://desaparecidosterremotovenezuela.com" className="text-violet-500 hover:text-violet-300" target="_blank" rel="noopener noreferrer">desaparecidosterremotovenezuela.com</a>
+                      {" · "}
+                      <a href="https://venezuelatebusca.com" className="text-violet-500 hover:text-violet-300" target="_blank" rel="noopener noreferrer">venezuelatebusca.com</a>
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Mobile: bottom sheet */}
-          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-900/98 border-t border-gray-800 z-20 flex flex-col max-h-[55vh]">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 shrink-0">
-              <div>
-                <p className="font-semibold text-white text-sm">📍 {selectedLocation ?? "Zona afectada"}</p>
-                <p className="text-gray-400 text-xs">{selected.length} reporte{selected.length !== 1 ? "s" : ""}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setPanelSort(s => s === "newest" ? "oldest" : "newest")}
-                  className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400">
-                  {panelSort === "newest" ? "↓ Recientes" : "↑ Antiguos"}
-                </button>
-                <button onClick={() => { setSelected([]); setSelectedLocation(null); }} className="text-gray-500 hover:text-white text-xl leading-none ml-1">×</button>
-              </div>
+          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-900/98 border-t border-gray-800 z-20 flex flex-col max-h-[70vh]">
+            {/* Tab bar */}
+            <div className="flex border-b border-gray-800 shrink-0">
+              <button onClick={() => setPanelTab("reports")}
+                className={`flex-1 py-2.5 text-xs font-semibold border-b-2 ${panelTab === "reports" ? "text-red-400 border-red-500" : "text-gray-500 border-transparent"}`}>
+                📢 Reportes{selected.length > 0 ? ` (${selected.length})` : ""}
+              </button>
+              <button onClick={() => setPanelTab("personas")}
+                className={`flex-1 py-2.5 text-xs font-semibold border-b-2 ${panelTab === "personas" ? "text-violet-400 border-violet-500" : "text-gray-500 border-transparent"}`}>
+                🧍 Personas{missingPanelTotal > 0 ? ` (${missingPanelTotal.toLocaleString()})` : ""}
+              </button>
+              <button onClick={() => { setPanelTab(null); setSelected([]); setSelectedLocation(null); setSelectedExternalPerson(null); }}
+                className="px-3 text-gray-500 text-lg leading-none shrink-0">×</button>
             </div>
-            <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
-              {sortedSelected.map((r) => (
-                <div key={`m-${r.id}`} className="p-3 flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {r.is_comment
-                        ? <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">💬</span>
-                        : <span className={`text-xs font-semibold px-1.5 py-0.5 rounded uppercase ${r.source === "twitter" ? "bg-blue-900 text-blue-300" : r.source === "instagram" ? "bg-pink-900 text-pink-300" : "bg-red-900 text-red-300"}`}>{r.source}</span>
-                      }
-                      {r.credibility === "low" && <span className="text-xs text-yellow-500">⚠ baja</span>}
-                      {r.credibility === "high" && <span className="text-xs text-green-400">✓ verif.</span>}
-                      {r.damage_level && <span className="text-xs text-gray-400">· {DAMAGE_LABEL[r.damage_level]}</span>}
+
+            {/* Reports tab – mobile */}
+            {panelTab === "reports" && (
+              <>
+                {selected.length > 0 && (
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 shrink-0">
+                    <div>
+                      <p className="font-semibold text-white text-sm">📍 {selectedLocation ?? "Zona afectada"}</p>
+                      <p className="text-gray-400 text-xs">{selected.length} reporte{selected.length !== 1 ? "s" : ""}</p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {!r.is_comment && <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400">↗</a>}
-                      <button onClick={async () => {
-                        if (flagged.has(r.id)) return;
-                        await fetch(`${API}/reports/${r.id}`, { method: "POST" });
-                        setFlagged(f => new Set(f).add(r.id));
-                      }} className={`text-xs ${flagged.has(r.id) ? "text-orange-400" : "text-gray-600"}`}>🚩</button>
-                    </div>
+                    <button onClick={() => setPanelSort(s => s === "newest" ? "oldest" : "newest")}
+                      className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400">
+                      {panelSort === "newest" ? "↓ Recientes" : "↑ Antiguos"}
+                    </button>
                   </div>
-                  {r.text_content && <p className={`text-xs leading-relaxed line-clamp-3 ${r.is_comment ? "text-gray-400 italic" : "text-gray-300"}`}>{r.text_content}</p>}
-                  <span className="text-gray-600 text-xs">{r.author ? `@${r.author}` : ""}{r.post_time ? ` · ${timeAgo(r.post_time)}` : ""}</span>
+                )}
+                {feed.length > 0 && selected.length === 0 && (
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 shrink-0">
+                    <p className="font-semibold text-white text-sm capitalize">
+                      {source === "instagram" ? "📸 Instagram" : source === "twitter" ? "📢 X/Twitter" : "▶️ YouTube"}
+                      <span className="text-gray-500 font-normal text-xs ml-2">{feed.length} reportes</span>
+                    </p>
+                    <button onClick={() => { setSource(""); setFeed([]); }} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+                  </div>
+                )}
+                <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
+                  {selected.length > 0 ? sortedSelected.map((r) => (
+                    <div key={`m-${r.id}`} className="p-3 flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {r.is_comment
+                            ? <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">💬</span>
+                            : <span className={`text-xs font-semibold px-1.5 py-0.5 rounded uppercase ${r.source === "twitter" ? "bg-blue-900 text-blue-300" : r.source === "instagram" ? "bg-pink-900 text-pink-300" : "bg-red-900 text-red-300"}`}>{r.source}</span>
+                          }
+                          {r.credibility === "low" && <span className="text-xs text-yellow-500">⚠ baja</span>}
+                          {r.credibility === "high" && <span className="text-xs text-green-400">✓ verif.</span>}
+                          {r.damage_level && <span className="text-xs text-gray-400">· {DAMAGE_LABEL[r.damage_level]}</span>}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {!r.is_comment && <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400">↗</a>}
+                          <button onClick={async () => {
+                            if (flagged.has(r.id)) return;
+                            await fetch(`${API}/reports/${r.id}`, { method: "POST" });
+                            setFlagged(f => new Set(f).add(r.id));
+                          }} className={`text-xs ${flagged.has(r.id) ? "text-orange-400" : "text-gray-600"}`}>🚩</button>
+                        </div>
+                      </div>
+                      {r.text_content && <p className={`text-xs leading-relaxed line-clamp-3 ${r.is_comment ? "text-gray-400 italic" : "text-gray-300"}`}>{r.text_content}</p>}
+                      <span className="text-gray-600 text-xs">{r.author ? `@${r.author}` : ""}{r.post_time ? ` · ${timeAgo(r.post_time)}` : ""}</span>
+                    </div>
+                  )) : feed.length > 0 ? (
+                    feed.map((r) => <FeedCard key={`m-${r.id}`} r={r} flagged={flagged} setFlagged={setFlagged} api={API} />)
+                  ) : (
+                    <p className="text-gray-500 text-sm p-6 text-center">Haz clic en el mapa para ver reportes.</p>
+                  )}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
+
+            {/* Personas tab – mobile */}
+            {panelTab === "personas" && (
+              <>
+                {selectedExternalPerson && (() => {
+                  const ep = selectedExternalPerson as { nombre?: string; edad?: number; estado?: string; foto?: string; ubicacion?: string; };
+                  return (
+                    <div className="px-3 py-2.5 border-b border-violet-800/40 bg-violet-950/20 shrink-0 flex gap-3 items-start">
+                      {ep.foto
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={ep.foto} alt={ep.nombre ?? ""} className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                        : null}
+                      <div className="flex-1 min-w-0">
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${ep.estado === "localizado" ? "bg-green-800 text-green-300" : "bg-violet-900 text-violet-300"}`}>
+                          {ep.estado === "localizado" ? "✓ Localizado" : "Sin contacto"}
+                        </span>
+                        <p className="font-bold text-white text-sm mt-1 truncate">{ep.nombre}</p>
+                        {ep.ubicacion ? <p className="text-gray-400 text-xs truncate">📍 {ep.ubicacion}</p> : null}
+                      </div>
+                      <button onClick={() => setSelectedExternalPerson(null)} className="text-gray-500 text-lg leading-none shrink-0">×</button>
+                    </div>
+                  );
+                })()}
+                <div className="px-3 py-2 shrink-0 flex flex-col gap-2 border-b border-gray-800">
+                  <div className="flex items-center justify-between">
+                    <p className="text-gray-400 text-xs"><span className="text-white">{missingPanelList.length}</span> de {missingPanelTotal.toLocaleString()}</p>
+                    <button onClick={() => { setShowMissing(true); setMissingStatus("idle"); }} className="px-2 py-0.5 rounded text-xs bg-orange-800 text-white">+ Reportar</button>
+                  </div>
+                  <input value={missingSearch} onChange={e => setMissingSearch(e.target.value)} placeholder="Buscar por nombre..."
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none" />
+                  <div className="flex gap-1">
+                    {([["", "Todos"], ["sin-contacto", "Sin contacto"], ["encontrado", "Encontrados"]] as const).map(([val, label]) => (
+                      <button key={val} onClick={() => setMissingStatusFilter(val)}
+                        className={`px-2 py-0.5 rounded text-xs ${missingStatusFilter === val ? "bg-violet-700 text-white" : "bg-gray-800 text-gray-400"}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
+                  {missingPanelList.map((p) => (
+                    <div key={`m-${p.id}`} className="px-3 py-2.5 flex gap-2.5">
+                      {p.photo_url
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={p.photo_url} alt={p.name} className="w-10 h-10 rounded object-cover shrink-0 border border-gray-700" />
+                        : <div className="w-10 h-10 rounded bg-gray-800 shrink-0 flex items-center justify-center text-gray-600">👤</div>}
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <p className="font-semibold text-white text-sm truncate">{p.name}</p>
+                          {p.age ? <span className="text-gray-500 text-xs">{p.age}a</span> : null}
+                        </div>
+                        {p.last_seen_location ? <p className="text-gray-400 text-xs truncate">📍 {p.last_seen_location}</p> : null}
+                        <span className={`text-xs px-1 py-0.5 rounded w-fit ${p.status === "encontrado" ? "bg-green-900 text-green-300" : "bg-orange-900/50 text-orange-400"}`}>
+                          {p.status === "encontrado" ? "✓" : "Sin contacto"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {missingPanelList.length > 0 && missingPanelList.length < missingPanelTotal && (
+                    <div className="p-3 flex justify-center shrink-0">
+                      <button onClick={loadMoreMissing} disabled={missingPanelLoading}
+                        className="px-4 py-2 rounded bg-gray-800 text-gray-300 text-xs disabled:opacity-50">
+                        {missingPanelLoading ? "Cargando..." : `Cargar más (${missingPanelTotal - missingPanelList.length} restantes)`}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
           </>
         )}
@@ -1291,7 +1366,8 @@ export default function Home() {
                     setMissingStatus("done");
                     setMissingForm({ name: "", age: "", last_seen_location: "", description: "", contact_info: "" });
                     setTimeout(() => setShowMissing(false), 2000);
-                    fetch(`${API}/missing-persons`).then(r => r.json()).then((persons: MissingPerson[]) => {
+                    fetch(`${API}/missing-persons?limit=200`).then(r => r.json()).then((res: { data: MissingPerson[] }) => {
+                      const persons = res.data ?? [];
                       setMissingPersons(persons);
                       renderMissingMarkers(persons);
                     }).catch(() => {});
@@ -1307,47 +1383,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* External missing person detail card */}
-      {selectedExternalPerson && (() => {
-        const ep = selectedExternalPerson as { nombre?: string; edad?: number; estado?: string; foto?: string; ubicacion?: string; descripcion?: string; contacto?: string; };
-        return (
-          <div className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-4"
-            onClick={(e) => { if (e.target === e.currentTarget) setSelectedExternalPerson(null); }}>
-            <div className="bg-gray-900 border border-violet-700 rounded-xl w-full max-w-sm p-5 flex flex-col gap-3">
-              <div className="flex justify-between items-start">
-                <div>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded ${ep.estado === "localizado" ? "bg-green-800 text-green-300" : "bg-violet-900 text-violet-300"}`}>
-                    {ep.estado === "localizado" ? "✓ Localizado" : "Sin contacto"}
-                  </span>
-                  <h3 className="text-white font-bold text-base mt-1.5">{ep.nombre}</h3>
-                  {ep.edad ? <p className="text-gray-400 text-xs">{ep.edad} años</p> : null}
-                </div>
-                <button onClick={() => setSelectedExternalPerson(null)} className="text-gray-500 hover:text-white text-2xl leading-none ml-2">×</button>
-              </div>
-              {ep.foto ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={ep.foto} alt={ep.nombre ?? "foto"}
-                  className="w-24 h-24 rounded-lg object-cover border border-gray-700" />
-              ) : null}
-              <div className="flex flex-col gap-1.5 text-sm">
-                {ep.ubicacion ? (
-                  <p className="text-gray-300"><span className="text-gray-500 text-xs">Última ubicación · </span>{ep.ubicacion}</p>
-                ) : null}
-                {ep.descripcion ? (
-                  <p className="text-gray-400 text-xs leading-relaxed">{ep.descripcion}</p>
-                ) : null}
-                {ep.contacto ? (
-                  <p className="text-gray-300 text-xs"><span className="text-gray-500">Contacto · </span>{ep.contacto}</p>
-                ) : null}
-              </div>
-              <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer"
-                className="text-center text-xs text-violet-400 hover:text-violet-300 underline mt-1">
-                Ver en desaparecidosterremotovenezuela.com →
-              </a>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Walkthrough modal */}
       {showWalkthrough && (
