@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   ).or("is_duplicate.eq.false,is_duplicate.is.null");
 
   if (matched) {
-    base = base.ilike("external_source", "%@mariojllesca%");
+    base = base.ilike("external_source", "%SismoVenezuela%");
   } else {
     if (status === "sin-contacto") base = base.or("status.eq.sin-contacto,status.is.null");
     else if (status === "encontrado") base = base.or("status.eq.encontrado,status.eq.localizado");

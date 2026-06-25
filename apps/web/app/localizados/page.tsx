@@ -17,6 +17,8 @@ interface Person {
   submitted_at?: string | null;
 }
 
+type Tab = "matched" | "all";
+
 function tweetLabel(url: string | null | undefined): string {
   if (!url) return "Fuente desconocida";
   const m = url.match(/x\.com\/([^/]+)\/status\//);
@@ -27,108 +29,155 @@ function sourceTitle(src: string | null | undefined): string {
   if (!src) return "Cruce de datos";
   if (src.includes("Domingo Luciani")) return "Lista de pacientes — Hospital Domingo Luciani";
   if (src.includes("Vargas")) return "Lista de pacientes — Hospital Dr. José María Vargas";
-  if (src.includes("Perez Carreño")) return "Lista de pacientes — Hospital Pérez Carreño";
-  return src.replace("@mariojllesca via ", "").replace("@mariojllesca — cruce con ", "");
+  if (src.includes("Pérez Carreño") || src.includes("Perez Carreño")) return "Lista de pacientes — Hospital Pérez Carreño";
+  return src.replace("SismoVenezuela via ", "").replace("SismoVenezuela — cruce con lista de pacientes del ", "").trim();
+}
+
+function sourceBadge(src: string | null | undefined): string {
+  if (!src) return "desconocida";
+  if (src.includes("desaparecidos-vzla") || src.includes("desaparecidoster")) return "desaparecidosterremotovenezuela.com";
+  if (src.includes("venezulatebusca")) return "venezulatebusca.com";
+  if (src.includes("SismoVenezuela")) return "SismoVenezuela";
+  return src;
 }
 
 export default function LocalizadosPage() {
-  const [people, setPeople] = useState<Person[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>("matched");
+  const [matched, setMatched] = useState<Person[]>([]);
+  const [all, setAll] = useState<Person[]>([]);
+  const [loadingMatched, setLoadingMatched] = useState(true);
+  const [loadingAll, setLoadingAll] = useState(false);
   const [q, setQ] = useState("");
   const [copied, setCopied] = useState(false);
 
+  // Load matched (our cross-references) on mount
   useEffect(() => {
     fetch(`${API}/missing-persons?matched=1&limit=200`)
       .then(r => r.json())
-      .then((res: { data: Person[] }) => {
-        setPeople(res.data ?? []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      .then((res: { data: Person[] }) => { setMatched(res.data ?? []); setLoadingMatched(false); })
+      .catch(() => setLoadingMatched(false));
   }, []);
 
-  // Group by source tweet URL
-  const grouped = useMemo(() => {
-    const map = new Map<string, { label: string; title: string; people: Person[] }>();
-    for (const p of people) {
+  // Load all localizados lazily when tab switches
+  useEffect(() => {
+    if (tab !== "all" || all.length > 0) return;
+    setLoadingAll(true);
+    fetch(`${API}/missing-persons?status=encontrado&limit=200`)
+      .then(r => r.json())
+      .then((res: { data: Person[] }) => { setAll(res.data ?? []); setLoadingAll(false); })
+      .catch(() => setLoadingAll(false));
+  }, [tab, all.length]);
+
+  const people = tab === "matched" ? matched : all;
+  const loading = tab === "matched" ? loadingMatched : loadingAll;
+
+  // For matched tab: group by source tweet
+  const groupedMatched = useMemo(() => {
+    const map = new Map<string, { label: string; title: string; tweetUrl: string | null; people: Person[] }>();
+    for (const p of matched) {
       const key = p.source2_url ?? "manual";
       if (!map.has(key)) {
         map.set(key, {
           label: tweetLabel(p.source2_url),
           title: sourceTitle(p.external_source),
+          tweetUrl: p.source2_url ?? null,
           people: [],
         });
       }
       map.get(key)!.people.push(p);
     }
     return Array.from(map.values());
-  }, [people]);
+  }, [matched]);
 
-  const filtered = useMemo(() => {
-    if (!q.trim()) return grouped;
-    const ql = q.toLowerCase();
-    return grouped.map(g => ({
-      ...g,
-      people: g.people.filter(p =>
-        p.name.toLowerCase().includes(ql) ||
-        (p.last_seen_location ?? "").toLowerCase().includes(ql)
-      ),
-    })).filter(g => g.people.length > 0);
-  }, [grouped, q]);
+  const ql = q.toLowerCase().trim();
+
+  const filteredGroups = useMemo(() => {
+    if (!ql) return groupedMatched;
+    return groupedMatched
+      .map(g => ({ ...g, people: g.people.filter(p => p.name.toLowerCase().includes(ql) || (p.last_seen_location ?? "").toLowerCase().includes(ql)) }))
+      .filter(g => g.people.length > 0);
+  }, [groupedMatched, ql]);
+
+  const filteredAll = useMemo(() => {
+    if (!ql) return all;
+    return all.filter(p => p.name.toLowerCase().includes(ql) || (p.last_seen_location ?? "").toLowerCase().includes(ql));
+  }, [all, ql]);
 
   function copyAll() {
-    const lines = grouped.flatMap(g => [
-      `\n📋 ${g.title} (${g.label})`,
-      ...g.people.map(p => `  • ${p.name}${p.last_seen_location ? ` — ${p.last_seen_location}` : ""}`),
-    ]);
-    navigator.clipboard.writeText(
-      `Personas localizadas por cruce de datos @mariojllesca — SismoVenezuela\n${lines.join("\n")}\n\nFuente del mapa: https://sismovenezuela.vercel.app/localizados`
-    );
+    let text = `Personas localizadas — SismoVenezuela\n`;
+    if (tab === "matched") {
+      text += `Cruce de datos contra listas hospitalarias\n`;
+      groupedMatched.forEach(g => {
+        text += `\n📋 ${g.title}${g.tweetUrl ? ` (${g.label} → ${g.tweetUrl})` : ""}\n`;
+        g.people.forEach(p => { text += `  • ${p.name}${p.last_seen_location ? ` — ${p.last_seen_location}` : ""}\n`; });
+      });
+    } else {
+      text += `Todos los localizados (${all.length})\n`;
+      all.forEach(p => { text += `  • ${p.name}${p.last_seen_location ? ` — ${p.last_seen_location}` : ""}\n`; });
+    }
+    text += `\nhttps://sismovenezuela.vercel.app/localizados`;
+    navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   }
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* Header */}
+      {/* Sticky header */}
       <div className="bg-gray-900 border-b border-gray-800 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <Link href="/"
-            className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition-colors shrink-0">
-            ← Volver al mapa
+          <Link href="/" className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition-colors shrink-0">
+            ← Mapa
           </Link>
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={copyAll}
-              className="px-3 py-1.5 rounded bg-cyan-800 hover:bg-cyan-700 text-cyan-100 text-xs font-semibold transition-colors">
-              {copied ? "✓ Copiado" : "Copiar lista"}
-            </button>
-          </div>
+          <span className="text-white font-semibold text-sm truncate">Personas localizadas</span>
+          <button onClick={copyAll}
+            className="px-3 py-1.5 rounded bg-cyan-800 hover:bg-cyan-700 text-cyan-100 text-xs font-semibold transition-colors shrink-0">
+            {copied ? "✓ Copiado" : "Copiar lista"}
+          </button>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-6">
+      <div className="max-w-2xl mx-auto px-4 py-5 flex flex-col gap-5">
 
-        {/* Hero */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold text-white">Personas localizadas</h1>
-            {!loading && (
-              <span className="px-2.5 py-0.5 rounded-full bg-green-900 text-green-300 text-sm font-bold">
-                {people.length} localizados
+        {/* Tabs + count */}
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-1 p-1 bg-gray-900 rounded-lg border border-gray-800">
+            <button
+              onClick={() => setTab("matched")}
+              className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === "matched" ? "bg-cyan-900 text-cyan-200" : "text-gray-500 hover:text-gray-300"}`}>
+              🔍 Cruce SismoVenezuela
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab === "matched" ? "bg-cyan-700 text-cyan-100" : "bg-gray-800 text-gray-500"}`}>
+                {matched.length}
               </span>
-            )}
+            </button>
+            <button
+              onClick={() => setTab("all")}
+              className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === "all" ? "bg-green-900 text-green-200" : "text-gray-500 hover:text-gray-300"}`}>
+              ✓ Todos los localizados
+              {all.length > 0 && (
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab === "all" ? "bg-green-700 text-green-100" : "bg-gray-800 text-gray-500"}`}>
+                  {all.length}
+                </span>
+              )}
+            </button>
           </div>
-          <p className="text-gray-400 text-sm leading-relaxed">
-            Personas confirmadas mediante <strong className="text-cyan-400">cruce de datos por @mariojllesca</strong> — comparando listas publicadas desde hospitales y fuentes oficiales contra los registros de desaparecidos de{" "}
-            <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline">desaparecidosterremotovenezuela.com</a>
-            {" y "}
-            <a href="https://venezulatebusca.com" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline">venezulatebusca.com</a>.
-          </p>
-          <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
-            <span>🔍 Método: comparación automática de nombres (Jaccard + SequenceMatcher)</span>
-            <span>·</span>
-            <span>⚠️ Los cruces son aproximados — siempre verificar con la fuente</span>
-          </div>
+
+          {/* Tab description */}
+          {tab === "matched" ? (
+            <div className="flex flex-col gap-1">
+              <p className="text-gray-400 text-xs leading-relaxed">
+                Personas confirmadas mediante <strong className="text-cyan-400">cruce manual de listas hospitalarias</strong> por SismoVenezuela, comparadas contra los registros de{" "}
+                <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline">desaparecidosterremotovenezuela.com</a>
+                {" y "}
+                <a href="https://venezulatebusca.com" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline">venezulatebusca.com</a>.
+              </p>
+              <p className="text-gray-600 text-[10px]">⚠️ Los cruces son aproximados — siempre verificar con la fuente original antes de confirmar.</p>
+            </div>
+          ) : (
+            <p className="text-gray-400 text-xs leading-relaxed">
+              Todos los registros con estado <strong className="text-green-400">localizado / encontrado</strong> en nuestra base de datos, de cualquier fuente — nuestro cruce, actualizaciones de plataformas colaboradoras y reportes directos.
+            </p>
+          )}
         </div>
 
         {/* Search */}
@@ -140,75 +189,90 @@ export default function LocalizadosPage() {
         />
 
         {/* Loading */}
-        {loading && (
-          <div className="text-center text-gray-600 py-12">Cargando...</div>
-        )}
+        {loading && <div className="text-center text-gray-600 py-12 text-sm">Cargando...</div>}
 
-        {/* Groups */}
-        {!loading && filtered.length === 0 && (
-          <div className="text-center text-gray-600 py-12 text-sm">Sin resultados</div>
-        )}
-
-        {!loading && filtered.map((group, gi) => (
-          <div key={gi} className="flex flex-col gap-3">
-            {/* Group header */}
-            <div className="flex items-start justify-between gap-3 border-b border-gray-800 pb-2">
-              <div>
-                <p className="text-white font-semibold text-sm">{group.title}</p>
-                {group.label !== "Fuente desconocida" && (
-                  <a
-                    href={grouped[gi]?.people[0]?.source2_url ?? "#"}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-cyan-500 text-xs hover:underline"
-                  >
-                    {group.label} — ver tweet fuente ↗
-                  </a>
-                )}
-              </div>
-              <span className="text-gray-500 text-xs shrink-0">{group.people.length} persona{group.people.length !== 1 ? "s" : ""}</span>
-            </div>
-
-            {/* People cards */}
-            <div className="flex flex-col gap-2">
-              {group.people.map((p, pi) => (
-                <div key={pi} className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-green-900/60 border border-green-700 flex items-center justify-center text-green-400 text-sm shrink-0 mt-0.5">
-                    ✓
-                  </div>
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <p className="font-semibold text-white text-sm">{p.name}</p>
-                    {p.age && <p className="text-gray-500 text-xs">{p.age} años</p>}
-                    {p.last_seen_location && (
-                      <p className="text-gray-400 text-xs">📍 {p.last_seen_location}</p>
+        {/* Matched tab — grouped by source */}
+        {!loading && tab === "matched" && (
+          <>
+            {filteredGroups.length === 0 && <div className="text-center text-gray-600 py-12 text-sm">Sin resultados</div>}
+            {filteredGroups.map((group, gi) => (
+              <div key={gi} className="flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-3 border-b border-gray-800 pb-2">
+                  <div className="flex flex-col gap-0.5">
+                    <p className="text-white font-semibold text-sm">{group.title}</p>
+                    {group.tweetUrl && (
+                      <a href={group.tweetUrl} target="_blank" rel="noopener noreferrer" className="text-cyan-500 text-xs hover:underline">
+                        {group.label} — ver tweet fuente ↗
+                      </a>
                     )}
-                    <p className="text-cyan-400 text-[10px] font-medium mt-0.5">🔍 Cruce de datos por @mariojllesca</p>
                   </div>
+                  <span className="text-gray-500 text-xs shrink-0">{group.people.length} persona{group.people.length !== 1 ? "s" : ""}</span>
                 </div>
-              ))}
+                <div className="flex flex-col gap-2">
+                  {group.people.map((p, pi) => (
+                    <div key={pi} className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-cyan-900/60 border border-cyan-700 flex items-center justify-center text-cyan-400 text-sm shrink-0 mt-0.5">✓</div>
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <p className="font-semibold text-white text-sm">{p.name}</p>
+                        {p.age && <p className="text-gray-500 text-xs">{p.age} años</p>}
+                        {p.last_seen_location && <p className="text-gray-400 text-xs">📍 {p.last_seen_location}</p>}
+                        <p className="text-cyan-400 text-[10px] font-medium mt-0.5">🔍 Cruce de datos por SismoVenezuela</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* All tab — flat list */}
+        {!loading && tab === "all" && (
+          <>
+            {filteredAll.length === 0 && <div className="text-center text-gray-600 py-12 text-sm">Sin resultados</div>}
+            <div className="flex flex-col gap-2">
+              {filteredAll.map((p, i) => {
+                const byUs = String(p.external_source ?? "").includes("SismoVenezuela");
+                const badge = sourceBadge(p.external_source);
+                return (
+                  <div key={i} className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 flex items-start gap-3">
+                    <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-sm shrink-0 mt-0.5 ${byUs ? "bg-cyan-900/60 border-cyan-700 text-cyan-400" : "bg-green-900/60 border-green-700 text-green-400"}`}>✓</div>
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <p className="font-semibold text-white text-sm">{p.name}</p>
+                      {p.age && <p className="text-gray-500 text-xs">{p.age} años</p>}
+                      {p.last_seen_location && <p className="text-gray-400 text-xs">📍 {p.last_seen_location}</p>}
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        {byUs
+                          ? <p className="text-cyan-400 text-[10px] font-medium">🔍 Cruce SismoVenezuela</p>
+                          : <p className="text-green-500 text-[10px]">Fuente: {badge}</p>
+                        }
+                        {p.source2_url && (
+                          <a href={p.source2_url} target="_blank" rel="noopener noreferrer" className="text-gray-500 text-[10px] hover:text-gray-300">ver fuente ↗</a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-        ))}
+          </>
+        )}
 
         {/* Footer */}
         {!loading && people.length > 0 && (
           <div className="border-t border-gray-800 pt-4 flex flex-col gap-3">
-            <p className="text-gray-600 text-xs text-center">
-              Si encontrás un error en el cruce,{" "}
-              <a href="https://github.com/nochinxx/venezuela-earthquake-map/issues" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white">
-                abrí un issue en GitHub
-              </a>
-              {" "}o contactá a{" "}
-              <a href="https://x.com/mariojllesca" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white">
-                @mariojllesca
-              </a>
-            </p>
             <div className="flex justify-center">
               <button onClick={copyAll}
                 className="px-4 py-2 rounded-lg bg-cyan-900 hover:bg-cyan-800 text-cyan-200 text-sm font-semibold transition-colors">
-                {copied ? "✓ Lista copiada al portapapeles" : "Copiar lista completa para compartir"}
+                {copied ? "✓ Lista copiada" : "Copiar lista completa"}
               </button>
             </div>
+            <p className="text-gray-600 text-xs text-center">
+              Error en el cruce →{" "}
+              <a href="https://github.com/nochinxx/venezuela-earthquake-map/issues" target="_blank" rel="noopener noreferrer" className="hover:text-gray-400">GitHub</a>
+              {" · "}
+              <a href="https://x.com/mariojllesca" target="_blank" rel="noopener noreferrer" className="hover:text-gray-400">@mariojllesca</a>
+            </p>
           </div>
         )}
       </div>

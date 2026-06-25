@@ -1004,7 +1004,17 @@ export default function Home() {
 
           {/* Solicitudes */}
           <button
-            onClick={() => { if (!showNeeds) { setShowNeeds(true); setPanelTab("solicitudes"); } else { setPanelTab("solicitudes"); } }}
+            onClick={() => {
+              if (!showNeeds) {
+                setShowNeeds(true);
+                setPanelTab("solicitudes");
+              } else if (panelTab !== "solicitudes") {
+                setPanelTab("solicitudes");
+              } else {
+                setShowNeeds(false);
+                setPanelTab(null);
+              }
+            }}
             className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors flex items-center gap-1 ${showNeeds ? "bg-orange-800 text-orange-100" : "bg-gray-800 text-gray-500 hover:bg-gray-700"}`}>
             🆘 Solicitudes
             {showNeeds && needsCount != null && needsCount > 0 && <span className="text-orange-300 text-[10px]">· {needsCount}</span>}
@@ -1190,16 +1200,16 @@ export default function Home() {
                         </div>
                         {p.last_seen_location ? <p className="text-gray-400 text-xs truncate">📍 {p.last_seen_location}</p> : null}
                         {p.contact_info ? <p className="text-gray-500 text-xs truncate">☎ {p.contact_info}</p> : null}
-                        {p.external_source && String(p.external_source).includes("@mariojllesca") && (
-                          <p className="text-[10px] text-cyan-400 font-medium">🔍 Cruce de datos por @mariojllesca</p>
+                        {p.external_source && String(p.external_source).includes("SismoVenezuela") && (
+                          <p className="text-[10px] text-cyan-400 font-medium">🔍 Cruce de datos por SismoVenezuela</p>
                         )}
                         <div className="flex items-center gap-2 mt-0.5">
-                          {p.source2_url && String(p.external_source || "").includes("@mariojllesca") && (
+                          {p.source2_url && String(p.external_source || "").includes("SismoVenezuela") && (
                             <a href={String(p.source2_url)} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-500 hover:text-cyan-300">
                               ver fuente →
                             </a>
                           )}
-                          {p.external_source && !String(p.external_source).includes("@mariojllesca") && (
+                          {p.external_source && !String(p.external_source).includes("SismoVenezuela") && (
                             <a href={p.source2_url || (p.external_source === "desaparecidos-vzla" ? "https://desaparecidosterremotovenezuela.com" : "https://venezuelatebusca.com")}
                               target="_blank" rel="noopener noreferrer" className="text-xs text-violet-400 hover:text-violet-300">
                               {p.external_source === "venezulatebusca" ? "venezulatebusca.com" : "desaparecidos.com"} →
@@ -1482,8 +1492,8 @@ export default function Home() {
                         <span className={`text-xs px-1 py-0.5 rounded w-fit ${(p.status === "encontrado" || p.status === "localizado") ? "bg-green-900 text-green-300" : "bg-orange-900/50 text-orange-400"}`}>
                           {(p.status === "encontrado" || p.status === "localizado") ? "✓ Localizado" : "Sin contacto"}
                         </span>
-                        {p.external_source && String(p.external_source).includes("@mariojllesca") && (
-                          <p className="text-[10px] text-cyan-400">🔍 Cruce @mariojllesca</p>
+                        {p.external_source && String(p.external_source).includes("SismoVenezuela") && (
+                          <p className="text-[10px] text-cyan-400">🔍 Cruce SismoVenezuela</p>
                         )}
                       </div>
                     </div>
@@ -1649,6 +1659,21 @@ export default function Home() {
                 <p className="text-green-600 text-xs">@vicentezavarce →</p>
               </a>
             </div>
+          </div>
+        )}
+
+        {/* Localizados card */}
+        {foundCount != null && foundCount > 0 && (
+          <div className="max-w-[200px]">
+            <a href="/localizados"
+              className="flex flex-col gap-1 bg-cyan-950/95 border border-cyan-700 rounded-lg px-3 py-2.5 hover:opacity-90 transition-opacity">
+              <div className="flex items-center gap-1.5">
+                <span className="text-cyan-400 font-bold text-xs uppercase tracking-wide">🔍 Localizados</span>
+              </div>
+              <p className="text-white text-xs font-semibold leading-tight">{foundCount} personas confirmadas</p>
+              <p className="text-cyan-300 text-xs leading-tight">Cruce de datos por SismoVenezuela</p>
+              <p className="text-cyan-600 text-xs">Ver lista completa →</p>
+            </a>
           </div>
         )}
         </div>{/* end stats+yummy column */}
