@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from("reports")
-    .select("id,source,source_url,author,text_content,media_urls,lat,lng,location_name,damage_level,post_time,verified,flag_count,credibility,is_comment,parent_url")
+    .select("id,source,source_url,author,text_content,media_urls,lat,lng,location_name,damage_level,post_time,scraped_at,verified,flag_count,credibility,is_comment,parent_url")
     .not("lat", "is", null)
     .eq("hidden", false)
     .order("post_time", { ascending: false })

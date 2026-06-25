@@ -29,7 +29,8 @@ interface Report {
   media_urls: string[];
   location_name: string;
   damage_level: number;
-  post_time: string;
+  post_time: string | null;
+  scraped_at: string | null;
   verified: boolean;
   flag_count: number;
   credibility: "high" | "medium" | "low" | null;
@@ -245,11 +246,15 @@ export default function Home() {
   const missingMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [walkthroughStep, setWalkthroughStep] = useState(0);
+  const [showEmergencyDir, setShowEmergencyDir] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [bannerOpen, setBannerOpen] = useState(true);
 
   useEffect(() => {
     if (!localStorage.getItem("wt_seen")) setShowWalkthrough(true);
+    if (window.innerWidth >= 768) setLegendOpen(true);
   }, []);
-  const [showEmergencyDir, setShowEmergencyDir] = useState(false);
   const clickedCoords = useRef<{ lat: number; lng: number } | null>(null);
 
   function sortReports(rows: Report[], order: SortOrder) {
@@ -464,122 +469,150 @@ export default function Home() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-gray-950 text-white">
-      {/* USGS red alert projection — always visible */}
-      <div className="bg-amber-950 border-b border-amber-800 px-4 py-1.5 flex items-center gap-3 flex-wrap shrink-0">
-        <span className="text-amber-400 font-bold text-xs uppercase tracking-wide">⚠️ USGS Alerta Roja</span>
-        <span className="text-amber-100 text-xs">
-          Proyección más probable: <strong>10,000 – 100,000 víctimas fatales</strong>
-          <span className="text-amber-500 ml-1">(41% de probabilidad · escenario extremo: +100,000)</span>
-        </span>
-        <a href="https://earthquake.usgs.gov/earthquakes/eventpage/atth5pbk/pager" target="_blank" rel="noopener noreferrer"
-          className="text-amber-500 text-xs hover:text-amber-300 ml-auto shrink-0">Ver USGS PAGER →</a>
-      </div>
-
-      {/* Confirmed casualties */}
-      <div className="bg-red-950 border-b border-red-800 px-4 py-2 flex items-center gap-4 flex-wrap shrink-0">
-        <span className="text-red-300 font-bold text-sm uppercase tracking-wide">Víctimas confirmadas</span>
-        <span className="text-white font-bold">
-          {casualties?.deaths ?? 0} <span className="text-red-300 font-normal">muertos</span>
-        </span>
-        {casualties?.injured != null && (
-          <span className="text-white font-bold">{casualties.injured} <span className="text-red-300 font-normal">heridos</span></span>
-        )}
-        {casualties?.missing != null && (
-          <span className="text-white font-bold">{casualties.missing} <span className="text-red-300 font-normal">desaparecidos</span></span>
-        )}
-        <span className="text-red-500 text-xs ml-auto italic">
-          {casualties?.source_name ?? "Cifra oficial pendiente de actualización"}
-          {casualties?.scraped_at ? ` · ${timeAgo(casualties.scraped_at)}` : ""}
-        </span>
-      </div>
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 shrink-0 flex-wrap gap-2">
-        <div>
-          <h1 className="font-bold text-red-400 text-lg leading-tight">🇻🇪 Venezuela Earthquake Map</h1>
-          <p className="text-gray-400 text-xs">Reportes en tiempo real — daños y zonas afectadas</p>
+      {/* Collapsible alert banners */}
+      <div className="shrink-0">
+        {/* Collapsed summary row — always visible */}
+        <div
+          className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 border-b border-gray-800 cursor-pointer select-none"
+          onClick={() => setBannerOpen(v => !v)}
+        >
+          <span className="text-amber-400 text-xs font-bold shrink-0">⚠️ USGS</span>
+          <span className="text-gray-300 text-xs truncate">
+            <span className="text-white font-bold">{casualties?.deaths ?? 0}</span>
+            <span className="text-red-400"> confirmados</span>
+            <span className="text-gray-500 mx-1">·</span>
+            <span className="text-amber-300">10K–100K estimados</span>
+          </span>
+          <span className="ml-auto text-gray-600 text-xs shrink-0">{bannerOpen ? "▲" : "▼"}</span>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {stats && (
-            <span className="text-gray-400 text-xs">
-              <span className="font-bold text-white">{stats.total}</span> reportes
-              {stats.by_source && Object.entries(stats.by_source).map(([s, n]) => (
-                <span key={s} className="ml-2 text-gray-500">{s}: {n}</span>
-              ))}
-            </span>
-          )}
 
-          {/* Source filter pills */}
-          <div className="flex gap-1">
-            {(["", "youtube", "twitter", "instagram"] as SourceFilter[]).map((s) => (
-              <button key={s} onClick={() => setSource(s)}
-                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-                  source === s
-                    ? "bg-red-600 text-white"
-                    : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-                }`}>
-                {s === "" ? "Todas" : s === "twitter" ? "X / Twitter" : s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
+        {/* Expanded details */}
+        {bannerOpen && (
+          <>
+            <div className="bg-amber-950 border-b border-amber-800 px-4 py-1.5 flex items-center gap-3 flex-wrap">
+              <span className="text-amber-400 font-bold text-xs uppercase tracking-wide">⚠️ USGS Alerta Roja</span>
+              <span className="text-amber-100 text-xs">
+                Proyección más probable: <strong>10,000 – 100,000 víctimas fatales</strong>
+                <span className="text-amber-500 ml-1 hidden sm:inline">(41% · escenario extremo: +100,000)</span>
+              </span>
+              <a href="https://earthquake.usgs.gov/earthquakes/eventpage/atth5pbk/pager" target="_blank" rel="noopener noreferrer"
+                className="text-amber-500 text-xs hover:text-amber-300 ml-auto shrink-0">USGS PAGER →</a>
+            </div>
+            <div className="bg-red-950 border-b border-red-800 px-4 py-2 flex items-center gap-3 flex-wrap">
+              <span className="text-red-300 font-bold text-xs uppercase tracking-wide">Confirmados</span>
+              <span className="text-white font-bold text-sm">{casualties?.deaths ?? 0} <span className="text-red-300 font-normal text-xs">muertos</span></span>
+              {casualties?.injured != null && <span className="text-white font-bold text-sm">{casualties.injured} <span className="text-red-300 font-normal text-xs">heridos</span></span>}
+              {casualties?.missing != null && <span className="text-white font-bold text-sm">{casualties.missing} <span className="text-red-300 font-normal text-xs">desaparecidos</span></span>}
+              <span className="text-red-500 text-xs ml-auto italic hidden sm:inline">
+                {casualties?.source_name ?? "Cifra oficial pendiente"}
+                {casualties?.scraped_at ? ` · ${timeAgo(casualties.scraped_at)}` : ""}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+      {/* Header */}
+      <div className="bg-gray-900 border-b border-gray-800 shrink-0">
+        {/* Main header row */}
+        <div className="flex items-center justify-between px-3 py-2 gap-2">
+          <div className="min-w-0">
+            <h1 className="font-bold text-red-400 text-base leading-tight truncate">🇻🇪 Venezuela Earthquake Map</h1>
+            {stats && (
+              <p className="text-gray-500 text-xs">
+                <span className="text-gray-300 font-semibold">{stats.total}</span> reportes
+                <span className="hidden sm:inline text-gray-600">
+                  {stats.by_source && Object.entries(stats.by_source).map(([s, n]) => (
+                    <span key={s} className="ml-2">{s}: {n}</span>
+                  ))}
+                </span>
+              </p>
+            )}
           </div>
-
-          {/* Sort toggle */}
-          <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
-            className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 hover:bg-gray-700">
-            {sort === "newest" ? "↓ Más recientes" : "↑ Más antiguos"}
-          </button>
-
-          <button onClick={() => setShowRelief(v => !v)}
-            className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-              showRelief ? "bg-green-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-            }`}>
-            📦 Acopios
-          </button>
-
-          <button onClick={() => { setShowMissing(true); setMissingStatus("idle"); }}
-            className="px-2 py-0.5 rounded text-xs bg-orange-800 hover:bg-orange-700 text-white font-medium">
-            🧍 Desaparecidos
-          </button>
-
-          <button onClick={() => { setShowSubmit(true); setSubmitStatus("idle"); }}
-            className="px-3 py-0.5 rounded text-xs bg-red-700 hover:bg-red-600 text-white font-semibold">
-            + Reportar daño
-          </button>
-
-          <button onClick={() => { setShowWalkthrough(true); setWalkthroughStep(0); }}
-            className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-bold flex items-center justify-center"
-            title="¿Cómo usar el mapa?">
-            ?
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Desktop-only actions */}
+            <div className="hidden md:flex items-center gap-1.5">
+              <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
+                className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 hover:bg-gray-700">
+                {sort === "newest" ? "↓ Recientes" : "↑ Antiguos"}
+              </button>
+              <button onClick={() => setShowRelief(v => !v)}
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${showRelief ? "bg-green-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
+                📦 Acopios
+              </button>
+              <button onClick={() => { setShowMissing(true); setMissingStatus("idle"); }}
+                className="px-2 py-0.5 rounded text-xs bg-orange-800 hover:bg-orange-700 text-white font-medium">
+                🧍 Desaparecidos
+              </button>
+            </div>
+            {/* Always visible: Reportar + guide */}
+            <button onClick={() => { setShowSubmit(true); setSubmitStatus("idle"); }}
+              className="px-2.5 py-1 rounded text-xs bg-red-700 hover:bg-red-600 text-white font-semibold">
+              + Reportar
+            </button>
+            <button onClick={() => { setShowWalkthrough(true); setWalkthroughStep(0); }}
+              className="w-7 h-7 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-bold flex items-center justify-center shrink-0"
+              title="¿Cómo usar el mapa?">
+              ?
+            </button>
+            {/* Mobile hamburger */}
+            <button onClick={() => setShowMobileMenu(v => !v)}
+              className="md:hidden w-7 h-7 rounded bg-gray-800 text-gray-300 flex items-center justify-center text-base">
+              {showMobileMenu ? "✕" : "☰"}
+            </button>
+          </div>
         </div>
+
+        {/* Filter pills row — always visible, scrollable on mobile */}
+        <div className="flex gap-1.5 px-3 pb-2 overflow-x-auto scrollbar-hide">
+          {(["", "youtube", "twitter", "instagram"] as SourceFilter[]).map((s) => (
+            <button key={s} onClick={() => { setSource(s); setShowMobileMenu(false); }}
+              className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${
+                source === s ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+              }`}>
+              {s === "" ? "Todas" : s === "twitter" ? "X/Twitter" : s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Mobile expanded menu */}
+        {showMobileMenu && (
+          <div className="md:hidden flex flex-wrap gap-2 px-3 pb-3 border-t border-gray-800 pt-2">
+            <button onClick={() => { setShowRelief(v => !v); setShowMobileMenu(false); }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium ${showRelief ? "bg-green-700 text-white" : "bg-gray-800 text-gray-400"}`}>
+              📦 Acopios
+            </button>
+            <button onClick={() => { setShowMissing(true); setMissingStatus("idle"); setShowMobileMenu(false); }}
+              className="px-3 py-1.5 rounded-full text-xs bg-orange-800 text-white font-medium">
+              🧍 Desaparecidos
+            </button>
+            <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
+              className="px-3 py-1.5 rounded-full text-xs bg-gray-800 text-gray-400">
+              {sort === "newest" ? "↓ Más recientes" : "↑ Más antiguos"}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-1 overflow-hidden relative">
         <div ref={mapRef} className="flex-1" />
 
         {selected.length > 0 && (
-          <div className="absolute right-0 top-0 h-full w-96 bg-gray-900/95 border-l border-gray-800 overflow-y-auto z-10">
+          <>
+          {/* Desktop: right side panel */}
+          <div className="hidden md:block absolute right-0 top-0 h-full w-96 bg-gray-900/95 border-l border-gray-800 overflow-y-auto z-10">
             <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-4 py-3">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-semibold text-white text-sm">
-                    📍 {selectedLocation ?? "Zona afectada"}
-                  </p>
+                  <p className="font-semibold text-white text-sm">📍 {selectedLocation ?? "Zona afectada"}</p>
                   <p className="text-gray-400 text-xs">{selected.length} reporte{selected.length !== 1 ? "s" : ""}</p>
                 </div>
-                <button onClick={() => { setSelected([]); setSelectedLocation(null); }}
-                  className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+                <button onClick={() => { setSelected([]); setSelectedLocation(null); }} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
               </div>
               <div className="flex gap-1 mt-2">
-                <button onClick={() => setPanelSort("newest")}
-                  className={`px-2 py-0.5 rounded text-xs ${panelSort === "newest" ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400"}`}>
-                  ↓ Más recientes
-                </button>
-                <button onClick={() => setPanelSort("oldest")}
-                  className={`px-2 py-0.5 rounded text-xs ${panelSort === "oldest" ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400"}`}>
-                  ↑ Más antiguos
-                </button>
+                <button onClick={() => setPanelSort("newest")} className={`px-2 py-0.5 rounded text-xs ${panelSort === "newest" ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400"}`}>↓ Recientes</button>
+                <button onClick={() => setPanelSort("oldest")} className={`px-2 py-0.5 rounded text-xs ${panelSort === "oldest" ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400"}`}>↑ Antiguos</button>
               </div>
             </div>
-
             <div className="flex flex-col divide-y divide-gray-800">
               {sortedSelected.map((r) => (
                 <div key={r.id} className={`p-4 flex flex-col gap-2 ${r.is_comment ? "bg-gray-950/60" : ""}`}>
@@ -637,7 +670,7 @@ export default function Home() {
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500 text-xs">
                       {r.author ? `@${r.author}` : ""}
-                      {r.post_time ? ` · ${timeAgo(r.post_time)}` : ""}
+                      {(r.post_time || r.scraped_at) ? ` · ${timeAgo((r.post_time || r.scraped_at)!)}` : ""}
                     </span>
                     <div className="flex items-center gap-2">
                       {!r.is_comment && (
@@ -663,48 +696,106 @@ export default function Home() {
               ))}
             </div>
           </div>
+
+          {/* Mobile: bottom sheet */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-900/98 border-t border-gray-800 z-20 flex flex-col max-h-[55vh]">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 shrink-0">
+              <div>
+                <p className="font-semibold text-white text-sm">📍 {selectedLocation ?? "Zona afectada"}</p>
+                <p className="text-gray-400 text-xs">{selected.length} reporte{selected.length !== 1 ? "s" : ""}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setPanelSort(s => s === "newest" ? "oldest" : "newest")}
+                  className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400">
+                  {panelSort === "newest" ? "↓ Recientes" : "↑ Antiguos"}
+                </button>
+                <button onClick={() => { setSelected([]); setSelectedLocation(null); }} className="text-gray-500 hover:text-white text-xl leading-none ml-1">×</button>
+              </div>
+            </div>
+            <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
+              {sortedSelected.map((r) => (
+                <div key={`m-${r.id}`} className="p-3 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {r.is_comment
+                        ? <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">💬</span>
+                        : <span className={`text-xs font-semibold px-1.5 py-0.5 rounded uppercase ${r.source === "twitter" ? "bg-blue-900 text-blue-300" : r.source === "instagram" ? "bg-pink-900 text-pink-300" : "bg-red-900 text-red-300"}`}>{r.source}</span>
+                      }
+                      {r.credibility === "low" && <span className="text-xs text-yellow-500">⚠ baja</span>}
+                      {r.credibility === "high" && <span className="text-xs text-green-400">✓ verif.</span>}
+                      {r.damage_level && <span className="text-xs text-gray-400">· {DAMAGE_LABEL[r.damage_level]}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!r.is_comment && <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400">↗</a>}
+                      <button onClick={async () => {
+                        if (flagged.has(r.id)) return;
+                        await fetch(`${API}/reports/${r.id}`, { method: "POST" });
+                        setFlagged(f => new Set(f).add(r.id));
+                      }} className={`text-xs ${flagged.has(r.id) ? "text-orange-400" : "text-gray-600"}`}>🚩</button>
+                    </div>
+                  </div>
+                  {r.text_content && <p className={`text-xs leading-relaxed line-clamp-3 ${r.is_comment ? "text-gray-400 italic" : "text-gray-300"}`}>{r.text_content}</p>}
+                  <span className="text-gray-600 text-xs">{r.author ? `@${r.author}` : ""}{r.post_time ? ` · ${timeAgo(r.post_time)}` : ""}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          </>
         )}
 
-        <div className="absolute bottom-8 left-4 flex flex-col gap-2 z-10">
-          {/* Emergency numbers */}
-          <div className="bg-red-950/95 border border-red-700 rounded p-3 text-xs flex flex-col gap-1.5">
-            <p className="font-bold text-red-300 mb-0.5 uppercase tracking-wide">📞 Emergencias</p>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-gray-400">Emergencia nacional</span>
-              <span className="font-bold text-white">911</span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-gray-400">Protección Civil</span>
-              <span className="font-bold text-white">166</span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-gray-400">Bomberos</span>
-              <span className="font-bold text-white">167</span>
-            </div>
-            <button onClick={() => setShowEmergencyDir(true)}
-              className="mt-1 text-red-400 hover:text-red-200 text-left underline">
-              Ver directorio completo →
+        <div className="absolute bottom-4 left-3 flex flex-col gap-2 z-10 max-w-[180px] md:max-w-none">
+          {/* Emergency box — collapsed pill on mobile, full on desktop */}
+          <div className="bg-red-950/95 border border-red-700 rounded text-xs">
+            <button
+              onClick={() => setLegendOpen(v => !v)}
+              className="flex items-center justify-between w-full px-3 py-2 gap-3"
+            >
+              <span className="font-bold text-red-300 uppercase tracking-wide whitespace-nowrap">📞 Emergencias</span>
+              {!legendOpen && <span className="text-white font-bold text-sm">911</span>}
+              <span className="text-red-600 text-xs ml-auto">{legendOpen ? "▼" : "▲"}</span>
             </button>
+            {legendOpen && (
+              <div className="px-3 pb-3 flex flex-col gap-1.5 border-t border-red-900">
+                <div className="flex items-center justify-between gap-4 pt-2">
+                  <span className="text-gray-400">Emergencia</span>
+                  <span className="font-bold text-white">911</span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-gray-400">Protección Civil</span>
+                  <span className="font-bold text-white">166</span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-gray-400">Bomberos</span>
+                  <span className="font-bold text-white">167</span>
+                </div>
+                <button onClick={() => setShowEmergencyDir(true)}
+                  className="mt-1 text-red-400 hover:text-red-200 text-left underline text-xs">
+                  Ver directorio →
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Damage legend */}
-          <div className="bg-gray-900/90 rounded p-3 text-xs flex flex-col gap-1.5">
-            <p className="font-semibold text-gray-300 mb-1">Nivel de daño</p>
-            {Object.entries(DAMAGE_COLOR).map(([lvl, color]) => (
-              <div key={lvl} className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ background: color }} />
-                <span className="text-gray-400">{DAMAGE_LABEL[Number(lvl)]}</span>
+          {legendOpen && (
+            <div className="bg-gray-900/90 rounded p-3 text-xs flex flex-col gap-1.5">
+              <p className="font-semibold text-gray-300 mb-1">Nivel de daño</p>
+              {Object.entries(DAMAGE_COLOR).map(([lvl, color]) => (
+                <div key={lvl} className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full shrink-0" style={{ background: color }} />
+                  <span className="text-gray-400">{DAMAGE_LABEL[Number(lvl)]}</span>
+                </div>
+              ))}
+              <div className="border-t border-gray-700 mt-1 pt-1.5 flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-green-500 shrink-0" />
+                <span className="text-gray-400">Acopio</span>
               </div>
-            ))}
-            <div className="border-t border-gray-700 mt-1 pt-1.5 flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="text-gray-400">Centro de acopio</span>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-orange-500 shrink-0" />
+                <span className="text-gray-400">Desaparecido</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-orange-500" />
-              <span className="text-gray-400">Desaparecido</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
