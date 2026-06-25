@@ -294,8 +294,6 @@ export default function Home() {
   const [showMissing, setShowMissing] = useState(false);
   const [missingForm, setMissingForm] = useState({ name: "", age: "", last_seen_location: "", description: "", contact_info: "" });
   const [missingStatus, setMissingStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
-  const [missingPersons, setMissingPersons] = useState<MissingPerson[]>([]);
-  const missingMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [showExternalMissing, setShowExternalMissing] = useState(false);
   const [externalMissingTotal, setExternalMissingTotal] = useState<number | null>(null);
   const [externalMissingLoading, setExternalMissingLoading] = useState(false);
@@ -363,26 +361,6 @@ export default function Home() {
     });
   }
 
-  function renderMissingMarkers(persons: MissingPerson[]) {
-    missingMarkersRef.current.forEach(m => m.remove());
-    missingMarkersRef.current = [];
-    if (!map.current) return;
-    persons.forEach((person) => {
-      if (!person.lat || !person.lng) return;
-      const el = document.createElement("div");
-      el.style.cssText = "width:28px;height:28px;background:#f97316;border:2px solid #fff;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.5)";
-      el.innerHTML = "🧍";
-      el.title = person.name;
-      const popup = new mapboxgl.Popup({ offset: 16, closeButton: false })
-        .setHTML(`<div style="color:#111;font-size:12px;max-width:200px"><strong>${person.name}</strong>${person.age ? `, ${person.age} años` : ""}<br/>${person.last_seen_location || ""}<br/><em style="color:#555">${person.contact_info || ""}</em></div>`);
-      new mapboxgl.Marker({ element: el })
-        .setLngLat([person.lng, person.lat])
-        .setPopup(popup)
-        .addTo(map.current!);
-      missingMarkersRef.current.push(new mapboxgl.Marker({ element: el }));
-    });
-  }
-
   function loadData() {
     const p = new URLSearchParams();
     if (source) p.set("source", source);
@@ -415,33 +393,33 @@ export default function Home() {
           "circle-opacity": 0.92,
         },
       });
+      const DAMAGE_LABEL: Record<string, string> = { total: "🔴 Derrumbe total", severo: "🟠 Daño severo", parcial: "🟡 Daño parcial", critical: "🆘 Rescate urgente" };
+      const SOURCE_URL: Record<string, string> = { "terremotovenezuela.com": "https://terremotovenezuela.com", "terremotovenezuela.app": "https://terremotovenezuela.app" };
       m.on("click", LAYER, (e) => {
         const feat = e.features?.[0];
         if (!feat) return;
         const p = feat.properties as Record<string, unknown>;
         const [lng, lat] = (feat.geometry as GeoJSON.Point).coordinates;
         if (buildingPopupRef.current) buildingPopupRef.current.remove();
+        const damageLabel = p.damage_type ? (DAMAGE_LABEL[p.damage_type as string] ?? String(p.damage_type)) : "";
         const affected = p.affected ? `<br/>👥 ${p.affected} afectados` : "";
         const confirmed = p.confirmations ? `<br/>✅ ${p.confirmations} confirmaciones` : "";
-        buildingPopupRef.current = new mapboxgl.Popup({ maxWidth: "260px" })
+        const src = p.source as string | undefined;
+        const srcLink = src ? `<br/><a href="${SOURCE_URL[src] ?? "#"}" target="_blank" style="color:#1d9bf0;font-size:10px;text-decoration:underline">${src}</a>` : "";
+        buildingPopupRef.current = new mapboxgl.Popup({ maxWidth: "280px" })
           .setLngLat([lng, lat])
           .setHTML(
             `<div style="font-size:12px;color:#111;padding:2px 0">
               <strong style="font-size:13px">🏚 ${p.place ?? "Edificio afectado"}</strong>
-              ${p.needs ? `<br/><span style="color:#555">${p.needs}</span>` : ""}
-              ${affected}${confirmed}
-              <br/><span style="color:#999;font-size:10px">${p.source ?? ""}</span>
+              ${damageLabel ? `<br/><span style="font-size:11px;font-weight:600">${damageLabel}</span>` : ""}
+              ${p.needs ? `<br/><span style="color:#444">${p.needs}</span>` : ""}
+              ${affected}${confirmed}${srcLink}
             </div>`
           )
           .addTo(m);
       });
       m.on("mouseenter", LAYER, () => { m.getCanvas().style.cursor = "pointer"; });
       m.on("mouseleave", LAYER, () => { m.getCanvas().style.cursor = ""; });
-    }).catch(() => {});
-    fetch(`${API}/missing-persons?limit=200`).then((r) => r.json()).then((res: { data: MissingPerson[] }) => {
-      const persons = res.data ?? [];
-      setMissingPersons(persons);
-      renderMissingMarkers(persons);
     }).catch(() => {});
     Promise.all([
       fetch(`${API}/reports/geojson?${p}`).then((r) => r.json()),
@@ -595,12 +573,6 @@ export default function Home() {
     });
   }, [showRelief]);
 
-  useEffect(() => {
-    missingMarkersRef.current.forEach(m => {
-      const el = m.getElement();
-      el.style.display = showExternalMissing ? "flex" : "none";
-    });
-  }, [showExternalMissing]);
 
   // External missing persons (desaparecidosterremotovenezuela.com)
   useEffect(() => {
@@ -1577,11 +1549,6 @@ export default function Home() {
                     setMissingStatus("done");
                     setMissingForm({ name: "", age: "", last_seen_location: "", description: "", contact_info: "" });
                     setTimeout(() => setShowMissing(false), 2000);
-                    fetch(`${API}/missing-persons?limit=200`).then(r => r.json()).then((res: { data: MissingPerson[] }) => {
-                      const persons = res.data ?? [];
-                      setMissingPersons(persons);
-                      renderMissingMarkers(persons);
-                    }).catch(() => {});
                   } else {
                     setMissingStatus("error");
                   }
