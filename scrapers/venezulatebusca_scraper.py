@@ -153,40 +153,34 @@ def sync():
         # 1. Exact cedula match → definite duplicate
         if cedula and cedula in cedula_index:
             existing_id = cedula_index[cedula]
-            # Update status and add source2 attribution
-            sb.table("missing_persons").update({
-                "status": "encontrado" if estado == "encontrado" else "sin-contacto",
-                "source2_id": source2_id,
-                "source2_url": "https://venezuelatebusca.com",
-                "is_duplicate": True,
-            }).eq("id", existing_id).execute()
+            if existing_id != "pending":
+                try:
+                    sb.table("missing_persons").update({
+                        "status": "encontrado" if estado == "encontrado" else "sin-contacto",
+                        "source2_id": source2_id,
+                        "source2_url": "https://venezuelatebusca.com",
+                        "is_duplicate": True,
+                    }).eq("id", existing_id).execute()
+                except Exception:
+                    pass
             duplicates += 1
             continue
 
-        # 2. High-similarity name match → likely duplicate
+        # 2. Exact normalized name match → likely duplicate
         is_dup = False
         if norm_name in name_index:
             existing_id = name_index[norm_name]
-            sb.table("missing_persons").update({
-                "source2_id": source2_id,
-                "source2_url": "https://venezuelatebusca.com",
-                "is_duplicate": True,
-            }).eq("id", existing_id).execute()
-            duplicates += 1
-            is_dup = True
-        else:
-            # Check fuzzy against all names (expensive — only for small remaining sets)
-            for existing_name in name_index:
-                if name_similarity(norm_name, existing_name) >= DEDUP_NAME_THRESHOLD:
-                    existing_id = name_index[existing_name]
+            if existing_id != "pending":
+                try:
                     sb.table("missing_persons").update({
                         "source2_id": source2_id,
                         "source2_url": "https://venezuelatebusca.com",
                         "is_duplicate": True,
                     }).eq("id", existing_id).execute()
-                    duplicates += 1
-                    is_dup = True
-                    break
+                except Exception:
+                    pass
+            duplicates += 1
+            is_dup = True
 
         if is_dup:
             continue
