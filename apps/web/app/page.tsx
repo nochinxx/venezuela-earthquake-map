@@ -316,6 +316,7 @@ export default function Home() {
   const [showReports, setShowReports] = useState(true);
   const [showBuildings, setShowBuildings] = useState(true);
   const [buildingCount, setBuildingCount] = useState<number | null>(null);
+  const [foundCount, setFoundCount] = useState<number | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<Record<string, unknown> | null>(null);
   const buildingPopupRef = useRef<mapboxgl.Popup | null>(null);
   const [feed, setFeed] = useState<Report[]>([]);
@@ -324,6 +325,10 @@ export default function Home() {
   useEffect(() => {
     if (!localStorage.getItem("wt_seen")) setShowWalkthrough(true);
     if (window.innerWidth >= 768) setLegendOpen(true);
+    fetch(`${API}/missing-persons?count=1&status=encontrado`)
+      .then(r => r.json())
+      .then((res: { total: number }) => setFoundCount(res.total ?? null))
+      .catch(() => {});
   }, []);
   const clickedCoords = useRef<{ lat: number; lng: number } | null>(null);
 
@@ -1246,6 +1251,12 @@ export default function Home() {
                 <span className="text-gray-400 text-xs">Desaparecidos</span>
                 <span className="text-violet-400 font-bold text-xs">{missingPanelTotal > 0 ? missingPanelTotal.toLocaleString() : "—"}</span>
               </div>
+              {foundCount != null && foundCount > 0 && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-gray-400 text-xs">Encontrados</span>
+                  <span className="text-green-400 font-bold text-xs">{foundCount.toLocaleString()}</span>
+                </div>
+              )}
               {buildingCount != null && buildingCount > 0 && (
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-gray-400 text-xs">Edificios</span>

@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   );
 
   if (status === "sin-contacto") base = base.or("status.eq.sin-contacto,status.is.null");
-  else if (status === "encontrado") base = base.eq("status", "encontrado");
+  else if (status === "encontrado") base = base.or("status.eq.encontrado,status.eq.localizado");
   if (q) base = base.ilike("name", `%${q}%`);
 
   if (countOnly) {
