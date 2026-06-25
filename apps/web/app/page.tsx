@@ -69,6 +69,15 @@ interface MissingPerson {
 
 const EMERGENCY_DIR = [
   {
+    category: "📞 Números de emergencia",
+    entries: [
+      { name: "Emergencias (Movistar)", location: "", phone: "911" },
+      { name: "Emergencias (Cantv fijo)", location: "", phone: "171" },
+      { name: "Emergencias (Digitel)", location: "", phone: "112" },
+      { name: "Emergencias (Movilnet)", location: "", phone: "*1" },
+    ],
+  },
+  {
     category: "🏥 Hospitales — Caracas",
     entries: [
       { name: "Hospital Andrés Herrera Vegas", location: "El Algodonal", phone: "(212) 472.31.38" },
@@ -109,7 +118,8 @@ const EMERGENCY_DIR = [
       { name: "Bomberos Antímano", location: "", phone: "(0212) 472.20.54" },
       { name: "Bomberos Catia la Mar", location: "", phone: "(0212) 351.99.66" },
       { name: "Bomberos Chacao", location: "", phone: "(0212) 265.32.61" },
-      { name: "Bomberos del Este / Cafetal", location: "", phone: "(0212) 987.43.34 / 985.50.60" },
+      { name: "Bomberos del Este", location: "Cafetal", phone: "(0212) 987.43.34 / 985.50.60" },
+      { name: "Bomberos El Cafetal", location: "", phone: "(0212) 985.36.40 / 985.29.77" },
       { name: "Bomberos El Paraíso", location: "", phone: "(0212) 481.09.61" },
       { name: "Bomberos El Valle", location: "", phone: "(0212) 672.01.75 / 672.06.36" },
       { name: "Bomberos La Guaira", location: "", phone: "(0212) 332.76.20 / 331.04.45" },
@@ -126,9 +136,9 @@ const EMERGENCY_DIR = [
     category: "🛡️ Protección Civil",
     entries: [
       { name: "Protección Civil (líneas 0800)", location: "", phone: "0800-5588427 / 0800-2668446 / 0800-2624368" },
-      { name: "Instituto de Protección Civil", location: "", phone: "(0212) 631.86.62 / 631.90.58 / 662.84.76 / 545.93.91" },
+      { name: "Instituto de Protección Civil", location: "", phone: "(0212) 631.86.62 / 631.90.58 / 662.84.76 / 662.32.05 / 545.93.91" },
       { name: "Defensa Civil Alcaldía Mayor", location: "", phone: "(0212) 662.67.59 / 662.32.05" },
-      { name: "Defensa Civil Nacional", location: "", phone: "0800.28326 / 0800.24845 / (0212) 483.98.05" },
+      { name: "Defensa Civil Nacional", location: "", phone: "0800.28326 / 0800.24845 / (0212) 483.98.05 / 662.22.52 / 662.66.19" },
     ],
   },
   {
@@ -155,9 +165,10 @@ const EMERGENCY_DIR = [
       { name: "Cuerpo de Emergencias Rescate y Transmisiones", location: "", phone: "(0212) 545.47.47" },
       { name: "Grupo de Rescate Caracas (El Ávila)", location: "", phone: "(0212) 615.63.86 / 415.46.61" },
       { name: "Grupo de Rescate Venezuela", location: "", phone: "(0212) 977.47.10" },
-      { name: "Organización de Rescate Humboldt", location: "", phone: "(0212) 234.22.34 / 0414.926.21.39" },
+      { name: "Organización de Rescate Humboldt", location: "", phone: "(0212) 234.22.34 / 0414.926.21.39 / 0414.305.68.68" },
       { name: "Socorristas Cruz Roja", location: "", phone: "(0212) 571.47.13" },
-      { name: "Inspectoría de Tránsito (I.N.T.)", location: "", phone: "167" },
+      { name: "Inspectoría Nacional de Tránsito (I.N.T.)", location: "", phone: "167" },
+      { name: "Vivex — Vigilancia Vías Expresas", location: "", phone: "(0212) 471.60.01 / 471.14.81" },
       { name: "Brigada Ministerio Transporte Terrestre", location: "", phone: "02125372677" },
     ],
   },
