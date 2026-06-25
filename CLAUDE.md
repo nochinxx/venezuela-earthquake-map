@@ -71,6 +71,32 @@ SUPABASE_SERVICE_KEY=...
 **DB counts (as of Jun 25, 2026):**
 - All rows: ~53,700 | Deduped: ~44,600 | Sin-contacto: ~42,000 | Localizados: ~2,600
 
+### `submitted_lists`
+| Column | Notes |
+|--------|-------|
+| `id` | uuid PK |
+| `submitter` | name/contact from form submitter (nullable) |
+| `hospital` | hospital + date description (required) |
+| `tweet_url` | link to original tweet/post (nullable) |
+| `names` | raw pasted names, newline or comma separated (nullable) |
+| `status` | `pending` → `processed` after running match_hospital_list.py |
+| `submitted_at` | timestamp |
+
+**BEFORE FIRST USE — run in Supabase Dashboard SQL Editor:**
+```sql
+CREATE TABLE IF NOT EXISTS submitted_lists (
+  id           uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  submitter    text,
+  hospital     text NOT NULL,
+  tweet_url    text,
+  names        text,
+  status       text DEFAULT 'pending',
+  submitted_at timestamptz DEFAULT now()
+);
+```
+
+**Workflow:** Form on /localizados (Listas tab → "+ Enviar lista") → inserts to `submitted_lists` with `status=pending` → Mario reviews in Supabase dashboard → runs `match_hospital_list.py` → mark `status=processed`.
+
 ### `building_damage`
 | Column | Notes |
 |--------|-------|
@@ -162,7 +188,8 @@ When someone sends a photo/tweet with a hospital patient list:
 | Hospital | Ward | Tweet | Names | Updated | Inserted |
 |----------|------|-------|-------|---------|----------|
 | Hospital Pérez Carreño | Pediatría 06/26 | @elhabito/2070174496913236064 | 15 | 5 | 10 |
-| Hospital Pérez Carreño | Adult ward | @uiteraardpaard/2070143455385317665 | 86 | TBD | TBD |
+| Hospital Pérez Carreño | Adult ward | @uiteraardpaard/2070143455385317665 | 86 | 46 | 40 |
+| Multi-hospital consolidado (Pérez Carreño + Luciani + HUC + Baquero + Vargas) | 25 jun 2026 | @mariangelli (PDF) | 299 | 68 | 231 |
 
 ---
 

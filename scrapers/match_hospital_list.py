@@ -148,7 +148,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--names", required=True, help="Comma-separated list of patient names")
     parser.add_argument("--hospital", required=True, help="Hospital name + city (stored as last_seen_location for new records)")
-    parser.add_argument("--tweet", required=True, help="URL of the tweet that published this patient list")
+    parser.add_argument("--tweet", required=False, default=None, help="URL of the tweet that published this patient list")
     parser.add_argument("--source-label", required=True, help="Short hospital label for external_source field")
     parser.add_argument("--dry-run", action="store_true", help="Print matches without writing to DB")
     parser.add_argument("--high-only", action="store_true", help="Only update high-confidence matches; insert medium as new records")

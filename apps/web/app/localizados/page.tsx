@@ -29,10 +29,13 @@ function tweetLabel(url: string | null | undefined): string {
 
 function sourceTitle(src: string | null | undefined): string {
   if (!src) return "Cruce de datos";
-  if (src.includes("Domingo Luciani")) return "Lista de pacientes — Hospital Domingo Luciani";
-  if (src.includes("Vargas")) return "Lista de pacientes — Hospital Dr. José María Vargas";
-  if (src.includes("Pérez Carreño") || src.includes("Perez Carreño")) return "Lista de pacientes — Hospital Pérez Carreño";
-  return src.replace("SismoVenezuela via ", "").replace("SismoVenezuela — cruce con lista de pacientes del ", "").trim();
+  // Strip confidence prefix: "SismoVenezuela:high via X" → "X", "SismoVenezuela via X" → "X"
+  const stripped = src.replace(/^SismoVenezuela(?::[a-z]+)? via /i, "").replace("SismoVenezuela — cruce con lista de pacientes del ", "").trim();
+  if (stripped.includes("Domingo Luciani")) return "Lista de pacientes — Hospital Domingo Luciani";
+  if (stripped.includes("Vargas")) return "Lista de pacientes — Hospital Dr. José María Vargas";
+  if (stripped.includes("Pérez Carreño") || stripped.includes("Perez Carreño")) return "Lista de pacientes — Hospital Pérez Carreño";
+  if (stripped.includes("Consolidado") || stripped.includes("mariangelli")) return "Listado hospitalario consolidado — múltiples hospitales Caracas";
+  return stripped || "Cruce de datos";
 }
 
 function sourceBadge(src: string | null | undefined): string {
@@ -41,6 +44,13 @@ function sourceBadge(src: string | null | undefined): string {
   if (src.includes("venezulatebusca")) return "venezulatebusca.com";
   if (src.includes("SismoVenezuela")) return "SismoVenezuela";
   return src;
+}
+
+function matchCircle(src: string | null | undefined, inDb: boolean): { circle: string; label: string } {
+  if (!inDb) return { circle: "⚫️", label: "Nueva entrada desde lista hospitalaria" };
+  if (src?.includes(":high")) return { circle: "🟡", label: "Alta confianza — nombre ≥85%" };
+  if (src?.includes(":medium")) return { circle: "🟠", label: "Confianza media — nombre 72–84%" };
+  return { circle: "🟡", label: "Alta confianza (cruce anterior)" };
 }
 
 export default function LocalizadosPage() {
@@ -56,6 +66,12 @@ export default function LocalizadosPage() {
   const [copied, setCopied] = useState(false);
   const [showMethod, setShowMethod] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [submitForm, setSubmitForm] = useState({ submitter: "", hospital: "", tweetUrl: "", names: "" });
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitDone, setSubmitDone] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [showStats, setShowStats] = useState(false);
 
   // Load matched (our cross-references) on mount
   useEffect(() => {
@@ -102,6 +118,12 @@ export default function LocalizadosPage() {
 
   // For matched tab: only confirmed DB matches (had a prior missing report)
   const confirmedMatched = useMemo(() => matched.filter(p => p.source_id), [matched]);
+
+  // Stats
+  const statsHigh = useMemo(() => confirmedMatched.filter(p => p.external_source?.includes(":high")).length, [confirmedMatched]);
+  const statsMedium = useMemo(() => confirmedMatched.filter(p => p.external_source?.includes(":medium")).length, [confirmedMatched]);
+  const statsLegacyHigh = useMemo(() => confirmedMatched.filter(p => !p.external_source?.includes(":high") && !p.external_source?.includes(":medium")).length, [confirmedMatched]);
+  const statsNewInserts = useMemo(() => all.filter(p => (p.external_source ?? "").includes("SismoVenezuela") && !p.source_id).length, [all]);
 
   // Group by source tweet
   const groupedMatched = useMemo(() => {
@@ -185,6 +207,32 @@ export default function LocalizadosPage() {
     setTimeout(() => setCopied(false), 2500);
   }
 
+  async function handleSubmitList(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitLoading(true);
+    setSubmitError("");
+    try {
+      const r = await fetch("/api/submit-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(submitForm),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || "Error al enviar");
+      setSubmitDone(true);
+    } catch (err: unknown) {
+      setSubmitError(err instanceof Error ? err.message : "Error al enviar");
+    } finally {
+      setSubmitLoading(false);
+    }
+  }
+
+  function closeSubmitModal() {
+    setShowSubmitModal(false);
+    setSubmitDone(false);
+    setSubmitError("");
+    setSubmitForm({ submitter: "", hospital: "", tweetUrl: "", names: "" });
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       {/* Sticky header */}
@@ -194,10 +242,17 @@ export default function LocalizadosPage() {
             ← Mapa
           </Link>
           <span className="text-white font-semibold text-sm truncate">Personas localizadas</span>
-          <button onClick={copyAll}
-            className="px-3 py-1.5 rounded bg-cyan-800 hover:bg-cyan-700 text-cyan-100 text-xs font-semibold transition-colors shrink-0">
-            {copied ? "✓ Copiado" : "Copiar lista"}
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => { setShowStats(true); }}
+              className="px-2.5 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold transition-colors">
+              📊
+            </button>
+            <button onClick={copyAll}
+              className="px-3 py-1.5 rounded bg-cyan-800 hover:bg-cyan-700 text-cyan-100 text-xs font-semibold transition-colors">
+              {copied ? "✓ Copiado" : "Copiar lista"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -261,19 +316,23 @@ export default function LocalizadosPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-200 font-semibold mb-1">Nivel de confianza — medallas</p>
+                    <p className="text-gray-200 font-semibold mb-1">Nivel de confianza</p>
                     <div className="flex flex-col gap-1.5">
                       <div className="flex items-start gap-2">
-                        <span className="text-base leading-none shrink-0">🥇</span>
-                        <span className="text-gray-400"><strong className="text-gray-300">Alta confianza (≥ 85 %)</strong> — nombre prácticamente idéntico o variación ortográfica menor. Ej: "Anderson Mendoza" ↔ "Anderson Mendoza" (100 %), "Matías Jiménez" ↔ "Mathias JIMENEZ" (97 %)</span>
+                        <span className="text-base leading-none shrink-0">🟢</span>
+                        <span className="text-gray-400"><strong className="text-gray-300">Cédula verificada</strong> — número de cédula coincide exactamente. Máxima confianza <em>(próximamente)</em></span>
                       </div>
                       <div className="flex items-start gap-2">
-                        <span className="text-base leading-none shrink-0">🥈</span>
-                        <span className="text-gray-400"><strong className="text-gray-300">Confianza media (72 – 84 %)</strong> — posible variación de apellido, nombre abreviado o error tipográfico. Requiere verificación manual antes de confirmar</span>
+                        <span className="text-base leading-none shrink-0">🟡</span>
+                        <span className="text-gray-400"><strong className="text-gray-300">Alta confianza (≥ 85 %)</strong> — nombre prácticamente idéntico o variación ortográfica menor. Ej: "Anderson Mendoza" ↔ "Anderson Mendoza" (100 %)</span>
                       </div>
                       <div className="flex items-start gap-2">
-                        <span className="text-base leading-none shrink-0">🏅</span>
-                        <span className="text-gray-400"><strong className="text-gray-300">Sin nivel registrado</strong> — cruce anterior a este sistema de confianza</span>
+                        <span className="text-base leading-none shrink-0">🟠</span>
+                        <span className="text-gray-400"><strong className="text-gray-300">Confianza media (72 – 84 %)</strong> — posible variación de apellido, nombre abreviado o error tipográfico. Requiere verificación manual</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-base leading-none shrink-0">⚫️</span>
+                        <span className="text-gray-400"><strong className="text-gray-300">Sin cruce previo</strong> — persona aparece en lista hospitalaria pero no estaba en la base de desaparecidos</span>
                       </div>
                     </div>
                   </div>
@@ -294,11 +353,18 @@ export default function LocalizadosPage() {
               <p className="text-gray-600 text-[10px]">⚠️ Los cruces son aproximados — siempre verificar con la fuente original antes de confirmar.</p>
             </div>
           ) : tab === "listas" ? (
-            <p className="text-gray-400 text-xs leading-relaxed">
-              Listas completas de pacientes publicadas en hospitales, tal como fueron difundidas.{" "}
-              <strong className="text-amber-400">Incluye a todas las personas de cada lista</strong>, estuvieran o no en la base de desaparecidos. Las que muestran{" "}
-              <span className="text-sm">🥇</span> fueron cruzadas con alta confianza contra la base de desaparecidos.
-            </p>
+            <div className="flex flex-col gap-2">
+              <p className="text-gray-400 text-xs leading-relaxed">
+                Listas completas de pacientes publicadas en hospitales, tal como fueron difundidas.{" "}
+                <strong className="text-amber-400">Incluye a todas las personas de cada lista</strong>, estuvieran o no en la base de desaparecidos. Las que muestran{" "}
+                <span className="text-sm">🟡</span> o <span className="text-sm">🟠</span> fueron cruzadas contra la base de desaparecidos; <span className="text-sm">⚫️</span> indica nueva entrada sin cruce previo.
+              </p>
+              <button
+                onClick={() => setShowSubmitModal(true)}
+                className="self-start px-3 py-1.5 rounded-lg border border-amber-700 text-amber-400 text-xs font-semibold hover:bg-amber-900/30 transition-colors">
+                + Enviar lista
+              </button>
+            </div>
           ) : (
             <p className="text-gray-400 text-xs leading-relaxed">
               Todos los registros con estado <strong className="text-green-400">localizado / encontrado</strong> en nuestra base de datos, de cualquier fuente — nuestro cruce, actualizaciones de plataformas colaboradoras y reportes directos.
@@ -340,6 +406,7 @@ export default function LocalizadosPage() {
                     const src = p.external_source ?? "";
                     const confidence: "high" | "medium" | null =
                       src.includes(":high") ? "high" : src.includes(":medium") ? "medium" : null;
+                    const { circle: mc, label: mcLabel } = matchCircle(p.external_source, true);
                     const isVzb = p.source_id?.startsWith("vzb_");
                     const platformLabel = isVzb ? "venezulatebusca.com" : "desaparecidosterremotovenezuela.com";
                     const platformUrl = isVzb
@@ -366,9 +433,7 @@ export default function LocalizadosPage() {
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-1 shrink-0">
-                            {confidence === "high" && <span title="Alta confianza ≥85%" className="text-base leading-none">🥇</span>}
-                            {confidence === "medium" && <span title="Confianza media 72–85%" className="text-base leading-none">🥈</span>}
-                            {!confidence && <span title="Confianza no registrada" className="text-base leading-none">🏅</span>}
+                            <span title={mcLabel} className="text-base leading-none">{mc}</span>
                             <span className="text-gray-600 text-xs">{isExpanded ? "▲" : "▼"}</span>
                           </div>
                         </button>
@@ -389,8 +454,7 @@ export default function LocalizadosPage() {
                             <div className="border-t border-gray-800 pt-2 flex flex-col gap-1">
                               <div className="flex items-center gap-2 mb-1">
                                 <p className="text-gray-600 text-[10px] uppercase tracking-wide">Fuentes</p>
-                                {confidence === "high" && <span className="text-[10px] text-green-500 font-semibold">🥇 Alta confianza (≥85%)</span>}
-                                {confidence === "medium" && <span className="text-[10px] text-yellow-500 font-semibold">🥈 Confianza media (72–85%)</span>}
+                                <span className="text-[10px] text-gray-400 font-medium">{mc} {mcLabel}</span>
                               </div>
                               <a href={platformUrl} target="_blank" rel="noopener noreferrer"
                                 className="text-gray-500 text-xs hover:text-violet-400 hover:underline">
@@ -419,9 +483,14 @@ export default function LocalizadosPage() {
         {!loading && tab === "listas" && (
           <>
             {filteredLists.length === 0 && <div className="text-center text-gray-600 py-12 text-sm">Sin listas cargadas</div>}
+            {filteredLists.length > 0 && (
+              <p className="text-gray-500 text-xs">
+                {filteredLists.length} lista{filteredLists.length !== 1 ? "s" : ""} · {filteredLists.reduce((s, g) => s + g.people.length, 0)} personas
+              </p>
+            )}
             {filteredLists.map((group, gi) => (
-              <div key={gi} className="flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-3 border-b border-amber-900/50 pb-2">
+              <div key={gi} className="flex flex-col gap-2">
+                <div className="sticky top-[52px] z-[5] bg-gray-950 pt-1 pb-2 border-b border-amber-900/50 flex items-start justify-between gap-3">
                   <div className="flex flex-col gap-0.5">
                     <p className="text-white font-semibold text-sm">{group.title}</p>
                     <a href={group.tweetUrl} target="_blank" rel="noopener noreferrer"
@@ -434,6 +503,7 @@ export default function LocalizadosPage() {
                 <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden divide-y divide-gray-800">
                   {group.people.map((p, pi) => {
                     const wasInDb = !!p.source_id;
+                    const { circle: lc, label: lcLabel } = matchCircle(p.external_source, wasInDb);
                     return (
                       <div key={pi} className="px-4 py-2.5 flex items-center gap-3">
                         <span className="text-gray-600 text-xs w-5 shrink-0">{pi + 1}.</span>
@@ -445,9 +515,7 @@ export default function LocalizadosPage() {
                             </p>
                           )}
                         </div>
-                        {wasInDb && (
-                          <span title="Persona verificada contra base de desaparecidos" className="text-[11px] shrink-0">🥇</span>
-                        )}
+                        <span title={lcLabel} className="text-[11px] shrink-0">{lc}</span>
                       </div>
                     );
                   })}
@@ -543,6 +611,191 @@ export default function LocalizadosPage() {
           </div>
         )}
       </div>
+
+      {/* Stats modal */}
+      {showStats && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={e => { if (e.target === e.currentTarget) setShowStats(false); }}>
+          <div className="w-full max-w-lg bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 shrink-0">
+              <p className="text-white font-semibold text-sm">📊 Estadísticas — Personas localizadas</p>
+              <button onClick={() => setShowStats(false)} className="text-gray-500 hover:text-white text-lg leading-none">×</button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4 flex flex-col gap-5">
+              {/* Top counts */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-800 rounded-xl p-4 flex flex-col gap-1">
+                  <p className="text-gray-400 text-[11px] uppercase tracking-wide">Total localizados</p>
+                  <p className="text-white text-2xl font-bold">{allTotal != null ? allTotal.toLocaleString("es") : "—"}</p>
+                  <p className="text-gray-500 text-[10px]">status: localizado + encontrado</p>
+                </div>
+                <div className="bg-gray-800 rounded-xl p-4 flex flex-col gap-1">
+                  <p className="text-gray-400 text-[11px] uppercase tracking-wide">Cruces SismoVenezuela</p>
+                  <p className="text-cyan-400 text-2xl font-bold">{matchedTotal != null ? matchedTotal.toLocaleString("es") : "—"}</p>
+                  <p className="text-gray-500 text-[10px]">verificados por nuestro algoritmo</p>
+                </div>
+              </div>
+
+              {/* Confidence breakdown */}
+              <div className="flex flex-col gap-2">
+                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">Nivel de confianza — Cruces confirmados</p>
+                <div className="bg-gray-800 rounded-xl divide-y divide-gray-700 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🟡</span>
+                      <span className="text-gray-300 text-sm">Alta confianza (≥85%)</span>
+                    </div>
+                    <span className="text-white font-bold text-sm">{statsHigh + statsLegacyHigh}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🟠</span>
+                      <span className="text-gray-300 text-sm">Confianza media (72–84%)</span>
+                    </div>
+                    <span className="text-white font-bold text-sm">{statsMedium}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">⚫️</span>
+                      <span className="text-gray-300 text-sm">Nueva entrada (sin cruce previo)</span>
+                    </div>
+                    <span className="text-white font-bold text-sm">{all.length > 0 ? statsNewInserts : "—"}</span>
+                  </div>
+                </div>
+                {all.length === 0 && (
+                  <p className="text-gray-600 text-[10px]">Abre la pestaña "Todos" para cargar el desglose completo.</p>
+                )}
+              </div>
+
+              {/* By hospital list */}
+              {groupedByList.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">Listas procesadas — {groupedByList.length} fuentes</p>
+                  <div className="bg-gray-800 rounded-xl divide-y divide-gray-700 overflow-hidden">
+                    {groupedByList.map((g, i) => {
+                      const verified = g.people.filter(p => !!p.source_id).length;
+                      return (
+                        <div key={i} className="px-4 py-3 flex items-start justify-between gap-3">
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <p className="text-gray-200 text-xs font-medium truncate">{g.title}</p>
+                            <a href={g.tweetUrl} target="_blank" rel="noopener noreferrer"
+                              className="text-amber-500 text-[10px] hover:underline truncate">{g.label} ↗</a>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-white text-sm font-bold">{g.people.length}</p>
+                            <p className="text-cyan-500 text-[10px]">{verified} 🟡</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {all.length === 0 && (
+                    <p className="text-gray-600 text-[10px]">Abre la pestaña "Listas" para ver el desglose completo.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Note */}
+              <p className="text-gray-600 text-[10px] leading-relaxed text-center border-t border-gray-800 pt-3">
+                Los cruces son aproximados. Un "localizado" indica que la persona apareció en una lista hospitalaria — no confirma estado médico ni de vida.<br/>
+                Fuentes: <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer" className="hover:text-gray-400 underline">desaparecidosterremotovenezuela.com</a>
+                {" · "}<a href="https://venezulatebusca.com" target="_blank" rel="noopener noreferrer" className="hover:text-gray-400 underline">venezulatebusca.com</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submit list modal */}
+      {showSubmitModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={e => { if (e.target === e.currentTarget) closeSubmitModal(); }}>
+          <div className="w-full max-w-lg bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+              <p className="text-white font-semibold text-sm">Enviar lista de pacientes</p>
+              <button onClick={closeSubmitModal} className="text-gray-500 hover:text-white text-lg leading-none">×</button>
+            </div>
+
+            {submitDone ? (
+              <div className="px-5 py-8 flex flex-col items-center gap-3 text-center">
+                <span className="text-3xl">✅</span>
+                <p className="text-white font-semibold text-sm">Lista recibida</p>
+                <p className="text-gray-400 text-xs leading-relaxed">
+                  La revisaremos y la procesaremos para cruzarla contra la base de desaparecidos. Gracias por contribuir.
+                </p>
+                <button onClick={closeSubmitModal} className="mt-2 px-4 py-2 rounded-lg bg-amber-800 hover:bg-amber-700 text-amber-100 text-sm font-semibold transition-colors">
+                  Cerrar
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitList} className="px-5 py-4 flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-gray-400 text-xs font-medium">Tu nombre o cómo contactarte <span className="text-gray-600">(opcional)</span></label>
+                  <input
+                    value={submitForm.submitter}
+                    onChange={e => setSubmitForm(f => ({ ...f, submitter: e.target.value }))}
+                    placeholder="Nombre, @usuario, teléfono..."
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-gray-400 text-xs font-medium">Hospital o fuente <span className="text-red-500">*</span></label>
+                  <input
+                    required
+                    value={submitForm.hospital}
+                    onChange={e => setSubmitForm(f => ({ ...f, hospital: e.target.value }))}
+                    placeholder="Ej: Hospital Pérez Carreño, Caracas — 25 jun 2026"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-gray-400 text-xs font-medium">Link al tweet / publicación <span className="text-gray-600">(opcional)</span></label>
+                  <input
+                    value={submitForm.tweetUrl}
+                    onChange={e => setSubmitForm(f => ({ ...f, tweetUrl: e.target.value }))}
+                    placeholder="https://x.com/..."
+                    type="url"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-gray-400 text-xs font-medium">Nombres de la lista <span className="text-gray-600">(opcional — uno por línea o separados por coma)</span></label>
+                  <textarea
+                    value={submitForm.names}
+                    onChange={e => setSubmitForm(f => ({ ...f, names: e.target.value }))}
+                    placeholder={"Juan Pérez\nMaría González\nCarlos López..."}
+                    rows={5}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 resize-none font-mono"
+                  />
+                </div>
+
+                {submitError && (
+                  <p className="text-red-400 text-xs">{submitError}</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={submitLoading}
+                  className="w-full py-3 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-sm font-semibold transition-colors disabled:opacity-50">
+                  {submitLoading ? "Enviando..." : "Enviar lista →"}
+                </button>
+
+                <p className="text-gray-600 text-[10px] text-center leading-relaxed">
+                  La información se revisará manualmente antes de publicarse. Si tienes una foto de la lista, adjúntala al tweet que nos menciones.
+                </p>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
