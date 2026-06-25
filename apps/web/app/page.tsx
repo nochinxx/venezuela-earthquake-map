@@ -311,10 +311,11 @@ export default function Home() {
   const [walkthroughStep, setWalkthroughStep] = useState(0);
   const [showEmergencyDir, setShowEmergencyDir] = useState(false);
   const [showSources, setShowSources] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
   const [legendOpen, setLegendOpen] = useState(false);
   const [bannerOpen, setBannerOpen] = useState(true);
   const [showYummyCard, setShowYummyCard] = useState(true);
+  const [showReports, setShowReports] = useState(true);
   const [showBuildings, setShowBuildings] = useState(true);
   const [buildingCount, setBuildingCount] = useState<number | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<Record<string, unknown> | null>(null);
@@ -530,6 +531,15 @@ export default function Home() {
       fetchNearby(clickedCoords.current.lat, clickedCoords.current.lng, 25, source);
     }
   }, [source]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const vis = showReports ? "visible" : "none";
+    ["reports-heat", "reports-clusters", "reports-cluster-count", "reports-points"].forEach(id => {
+      if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", vis);
+    });
+  }, [showReports]);
 
   useEffect(() => {
     reliefMarkersRef.current.forEach(m => {
@@ -798,34 +808,10 @@ export default function Home() {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {/* Desktop-only actions */}
-            <div className="hidden md:flex items-center gap-1.5">
-              <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
-                className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 hover:bg-gray-700">
-                {sort === "newest" ? "↓ Recientes" : "↑ Antiguos"}
-              </button>
-              <button onClick={() => setShowRelief(v => !v)}
-                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${showRelief ? "bg-green-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
-                📦 Acopios
-              </button>
-              <button onClick={() => setPanelTab(p => p === "personas" ? null : "personas")}
-                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${panelTab === "personas" ? "bg-violet-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
-                🧍 Desaparecidos {missingPanelTotal > 0 ? `· ${missingPanelTotal.toLocaleString()}` : ""}
-              </button>
-              <button
-                onClick={() => { setShowExternalMissing(v => !v); if (!showExternalMissing) setPanelTab("personas"); }}
-                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors flex items-center gap-1 ${showExternalMissing ? "bg-violet-800 text-violet-200" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
-                title="Mostrar marcadores de desaparecidos en el mapa"
-              >
-                🗺 {externalMissingLoading ? "..." : externalMissingTotal ? `${externalMissingTotal.toLocaleString()} en mapa` : "Ver en mapa"}
-              </button>
-              <button onClick={() => setShowBuildings(v => !v)}
-                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${showBuildings ? "bg-amber-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
-                title="Edificios afectados / derrumbes">
-                🏚 Edificios{buildingCount != null ? ` · ${buildingCount}` : ""}
-              </button>
-            </div>
-            {/* Always visible: Reportar + guide */}
+            <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
+              className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 hover:bg-gray-700 hidden sm:block">
+              {sort === "newest" ? "↓ Recientes" : "↑ Antiguos"}
+            </button>
             <button onClick={() => { setShowSubmit(true); setSubmitStatus("idle"); }}
               className="px-2.5 py-1 rounded text-xs bg-red-700 hover:bg-red-600 text-white font-semibold">
               + Reportar
@@ -835,7 +821,6 @@ export default function Home() {
               title="Apoya este proyecto">
               ☕ Donar
             </a>
-
             <button onClick={() => setShowSources(true)}
               className="px-2 py-0.5 rounded text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 hidden sm:flex items-center gap-1 shrink-0"
               title="Fuentes y recursos aliados">
@@ -846,51 +831,75 @@ export default function Home() {
               title="¿Cómo usar el mapa?">
               ?
             </button>
-            {/* Mobile hamburger */}
-            <button onClick={() => setShowMobileMenu(v => !v)}
-              className="md:hidden w-7 h-7 rounded bg-gray-800 text-gray-300 flex items-center justify-center text-base">
-              {showMobileMenu ? "✕" : "☰"}
-            </button>
           </div>
         </div>
 
-        {/* Filter pills row — always visible, scrollable on mobile */}
-        <div className="flex gap-1.5 px-3 pb-2 overflow-x-auto scrollbar-hide">
-          {(["", "youtube", "twitter", "instagram"] as SourceFilter[]).map((s) => (
-            <button key={s} onClick={() => { setSource(s); setShowMobileMenu(false); }}
-              className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${
-                source === s ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-              }`}>
-              {s === "" ? "Todas" : s === "twitter" ? "X/Twitter" : s.charAt(0).toUpperCase() + s.slice(1)}
+        {/* Unified layer pills — all map layers in one scrollable row */}
+        <div className="flex gap-1 px-3 pb-2 overflow-x-auto scrollbar-hide items-center">
+          {/* Reset all */}
+          <button
+            onClick={() => { setSource(""); setShowReports(true); setShowRelief(true); setShowBuildings(true); }}
+            className="px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">
+            Todas
+          </button>
+
+          <span className="text-gray-700 text-xs shrink-0 mx-0.5">·</span>
+
+          {/* Reportes group */}
+          <button
+            onClick={() => setShowReports(v => !v)}
+            className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${showReports ? "bg-red-700 text-white" : "bg-gray-800 text-gray-500 hover:bg-gray-700"}`}>
+            📡 Reportes
+          </button>
+          {(["youtube", "twitter", "instagram"] as const).map((s) => (
+            <button key={s}
+              onClick={() => { setShowReports(true); setSource(source === s ? "" : s); }}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap shrink-0 transition-colors border ${
+                showReports && source === s
+                  ? "bg-red-600 text-white border-red-500"
+                  : showReports
+                  ? "bg-gray-800 text-gray-400 hover:bg-gray-700 border-gray-700"
+                  : "bg-gray-900 text-gray-600 border-gray-800 cursor-default"
+              }`}
+              disabled={!showReports}>
+              {s === "twitter" ? "X" : s === "youtube" ? "YT" : "IG"}
             </button>
           ))}
-        </div>
 
-        {/* Mobile expanded menu */}
-        {showMobileMenu && (
-          <div className="md:hidden flex flex-wrap gap-2 px-3 pb-3 border-t border-gray-800 pt-2">
-            <button onClick={() => { setShowRelief(v => !v); setShowMobileMenu(false); }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium ${showRelief ? "bg-green-700 text-white" : "bg-gray-800 text-gray-400"}`}>
-              📦 Acopios
-            </button>
-            <button onClick={() => { setPanelTab(p => p === "personas" ? null : "personas"); setShowMobileMenu(false); }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium ${panelTab === "personas" ? "bg-violet-700 text-white" : "bg-gray-800 text-gray-400"}`}>
-              🧍 Desaparecidos {missingPanelTotal > 0 ? `· ${missingPanelTotal.toLocaleString()}` : ""}
-            </button>
-            <button onClick={() => { setShowExternalMissing(v => !v); if (!showExternalMissing) setPanelTab("personas"); setShowMobileMenu(false); }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium ${showExternalMissing ? "bg-violet-800 text-violet-200" : "bg-gray-800 text-gray-400"}`}>
-              🗺 {externalMissingTotal ? `${externalMissingTotal.toLocaleString()} en mapa` : "Ver en mapa"}
-            </button>
-            <button onClick={() => { setShowBuildings(v => !v); setShowMobileMenu(false); }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium ${showBuildings ? "bg-amber-700 text-white" : "bg-gray-800 text-gray-400"}`}>
-              🏚 Edificios{buildingCount != null ? ` · ${buildingCount}` : ""}
-            </button>
-            <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
-              className="px-3 py-1.5 rounded-full text-xs bg-gray-800 text-gray-400">
-              {sort === "newest" ? "↓ Más recientes" : "↑ Más antiguos"}
-            </button>
-          </div>
-        )}
+          <span className="text-gray-700 text-xs shrink-0 mx-0.5">·</span>
+
+          {/* Desaparecidos */}
+          <button
+            onClick={() => { setShowExternalMissing(v => !v); if (!showExternalMissing) setPanelTab("personas"); }}
+            className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors flex items-center gap-1 ${showExternalMissing ? "bg-violet-800 text-violet-100" : "bg-gray-800 text-gray-500 hover:bg-gray-700"}`}>
+            🧍 Desaparecidos
+            {showExternalMissing && externalMissingTotal != null && <span className="text-violet-300 text-[10px]">· {externalMissingTotal.toLocaleString()}</span>}
+            {showExternalMissing && (
+              <span className="text-violet-400 text-[10px] hover:text-white underline decoration-dotted" onClick={(e) => { e.stopPropagation(); setShowSources(true); }}>↗</span>
+            )}
+          </button>
+
+          {/* Acopios */}
+          <button
+            onClick={() => setShowRelief(v => !v)}
+            className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors flex items-center gap-1 ${showRelief ? "bg-green-800 text-green-100" : "bg-gray-800 text-gray-500 hover:bg-gray-700"}`}>
+            📦 Acopios
+            {showRelief && (
+              <span className="text-green-400 text-[10px] hover:text-white underline decoration-dotted" onClick={(e) => { e.stopPropagation(); setShowSources(true); }}>↗</span>
+            )}
+          </button>
+
+          {/* Edificios */}
+          <button
+            onClick={() => setShowBuildings(v => !v)}
+            className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors flex items-center gap-1 ${showBuildings ? "bg-amber-800 text-amber-100" : "bg-gray-800 text-gray-500 hover:bg-gray-700"}`}>
+            🏚 Edificios
+            {showBuildings && buildingCount != null && <span className="text-amber-300 text-[10px]">· {buildingCount}</span>}
+            {showBuildings && (
+              <span className="text-amber-400 text-[10px] hover:text-white underline decoration-dotted" onClick={(e) => { e.stopPropagation(); setShowSources(true); }}>↗</span>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden relative">
