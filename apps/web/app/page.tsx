@@ -463,9 +463,12 @@ export default function Home() {
       {/* USGS red alert projection — always visible */}
       <div className="bg-amber-950 border-b border-amber-800 px-4 py-1.5 flex items-center gap-3 flex-wrap shrink-0">
         <span className="text-amber-400 font-bold text-xs uppercase tracking-wide">⚠️ USGS Alerta Roja</span>
-        <span className="text-amber-100 text-xs">Proyección de fatalidades: <strong>10,000 – 100,000</strong> víctimas estimadas</span>
-        <a href="https://earthquake.usgs.gov/earthquakes/eventpage/us7000pjf8/pager" target="_blank" rel="noopener noreferrer"
-          className="text-amber-500 text-xs hover:text-amber-300 ml-auto">Ver USGS PAGER →</a>
+        <span className="text-amber-100 text-xs">
+          Proyección más probable: <strong>10,000 – 100,000 víctimas fatales</strong>
+          <span className="text-amber-500 ml-1">(41% de probabilidad · escenario extremo: +100,000)</span>
+        </span>
+        <a href="https://earthquake.usgs.gov/earthquakes/eventpage/atth5pbk/pager" target="_blank" rel="noopener noreferrer"
+          className="text-amber-500 text-xs hover:text-amber-300 ml-auto shrink-0">Ver USGS PAGER →</a>
       </div>
 
       {/* Confirmed casualties */}
