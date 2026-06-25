@@ -129,8 +129,13 @@ def is_relief_post(text: str) -> bool:
 def seed():
     print("[relief_centers] Seeding Comando Venezuela locations...")
     for center in SEED_CENTERS:
+        # Check if address already exists to avoid duplicates
+        existing = sb.table("relief_centers").select("id").eq("address", center["address"]).execute().data
+        if existing:
+            print(f"  (skip) {center['name']} already in DB")
+            continue
         try:
-            sb.table("relief_centers").upsert(center, on_conflict="address").execute()
+            sb.table("relief_centers").insert(center).execute()
             print(f"  ✓ {center['name']}")
         except Exception as e:
             print(f"  [error] {center['name']}: {e}")
@@ -178,9 +183,11 @@ def scrape_x():
                     "accepted_items": "",
                 }
                 try:
-                    sb.table("relief_centers").upsert(
-                        {k: v for k, v in payload.items() if v is not None},
-                        on_conflict="address"
+                    existing = sb.table("relief_centers").select("id").eq("address", text[:300]).execute().data
+                    if existing:
+                        continue
+                    sb.table("relief_centers").insert(
+                        {k: v for k, v in payload.items() if v is not None}
                     ).execute()
                     found += 1
                     print(f"    → {payload['name']} in {loc}")
