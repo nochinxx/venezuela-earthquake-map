@@ -32,6 +32,9 @@ interface Report {
   post_time: string;
   verified: boolean;
   flag_count: number;
+  credibility: "high" | "medium" | "low" | null;
+  is_comment: boolean;
+  parent_url: string | null;
 }
 
 const DAMAGE_COLOR: Record<number, string> = {
@@ -112,7 +115,11 @@ export default function Home() {
         source: "reports",
         maxzoom: 10,
         paint: {
-          "heatmap-weight": ["interpolate", ["linear"], ["get", "damage_level"], 1, 0.2, 5, 1],
+          "heatmap-weight": [
+            "*",
+            ["interpolate", ["linear"], ["get", "damage_level"], 1, 0.2, 5, 1],
+            ["match", ["get", "credibility"], "low", 0.4, "high", 1.2, 1.0],
+          ],
           "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 10, 3],
           "heatmap-color": [
             "interpolate", ["linear"], ["heatmap-density"],
@@ -314,13 +321,32 @@ export default function Home() {
 
             <div className="flex flex-col divide-y divide-gray-800">
               {sortedSelected.map((r) => (
-                <div key={r.id} className="p-4 flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${
-                      r.source === "twitter" ? "bg-blue-900 text-blue-300" :
-                      r.source === "instagram" ? "bg-pink-900 text-pink-300" :
-                      "bg-red-900 text-red-300"
-                    }`}>{r.source}</span>
+                <div key={r.id} className={`p-4 flex flex-col gap-2 ${r.is_comment ? "bg-gray-950/60" : ""}`}>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      {r.is_comment ? (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-800 text-gray-400">
+                          💬 comentario
+                        </span>
+                      ) : (
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${
+                          r.source === "twitter" ? "bg-blue-900 text-blue-300" :
+                          r.source === "instagram" ? "bg-pink-900 text-pink-300" :
+                          r.source === "web" ? "bg-green-900 text-green-300" :
+                          "bg-red-900 text-red-300"
+                        }`}>{r.source}</span>
+                      )}
+                      {r.credibility === "low" && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-500 border border-yellow-800">
+                          baja confiabilidad
+                        </span>
+                      )}
+                      {r.credibility === "high" && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-green-900/50 text-green-400 border border-green-800">
+                          verificado
+                        </span>
+                      )}
+                    </div>
                     {r.damage_level && (
                       <div className="flex items-center gap-1">
                         <div className="w-2 h-2 rounded-full" style={{ background: DAMAGE_COLOR[r.damage_level] }} />
@@ -330,10 +356,19 @@ export default function Home() {
                   </div>
 
                   {r.text_content && (
-                    <p className="text-gray-300 text-sm leading-relaxed">{r.text_content}</p>
+                    <p className={`text-sm leading-relaxed ${r.is_comment ? "text-gray-400 italic" : "text-gray-300"}`}>
+                      {r.text_content}
+                    </p>
                   )}
 
-                  {r.media_urls?.length > 0 && (
+                  {r.is_comment && r.parent_url && (
+                    <a href={r.parent_url} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-gray-600 hover:text-gray-400">
+                      Ver video original →
+                    </a>
+                  )}
+
+                  {!r.is_comment && r.media_urls?.length > 0 && (
                     <img src={r.media_urls[0]} alt="media"
                       className="rounded w-full object-cover max-h-40" />
                   )}
@@ -344,10 +379,12 @@ export default function Home() {
                       {r.post_time ? ` · ${timeAgo(r.post_time)}` : ""}
                     </span>
                     <div className="flex items-center gap-2">
-                      <a href={r.source_url} target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-blue-400 hover:text-blue-300">
-                        Ver fuente →
-                      </a>
+                      {!r.is_comment && (
+                        <a href={r.source_url} target="_blank" rel="noopener noreferrer"
+                          className="text-xs text-blue-400 hover:text-blue-300">
+                          Ver fuente →
+                        </a>
+                      )}
                       <button
                         title="Reportar como falso"
                         onClick={async () => {
