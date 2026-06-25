@@ -19,7 +19,7 @@ interface Person {
   submitted_at?: string | null;
 }
 
-type Tab = "matched" | "all";
+type Tab = "matched" | "all" | "listas";
 
 function tweetLabel(url: string | null | undefined): string {
   if (!url) return "Fuente desconocida";
@@ -62,9 +62,9 @@ export default function LocalizadosPage() {
       .catch(() => setLoadingMatched(false));
   }, []);
 
-  // Load all localizados lazily when tab switches
+  // Load all localizados lazily when tab switches (also needed for "listas")
   useEffect(() => {
-    if (tab !== "all" || all.length > 0) return;
+    if ((tab !== "all" && tab !== "listas") || all.length > 0) return;
     setLoadingAll(true);
     fetch(`/api/missing-persons?status=encontrado&limit=500`)
       .then(r => r.json())
@@ -73,7 +73,7 @@ export default function LocalizadosPage() {
   }, [tab, all.length]);
 
   const people = tab === "matched" ? matched : all;
-  const loading = tab === "matched" ? loadingMatched : loadingAll;
+  const loading = tab === "matched" ? loadingMatched : loadingAll || (tab === "listas" && loadingAll);
 
   // For matched tab: only confirmed DB matches (had a prior missing report)
   const confirmedMatched = useMemo(() => matched.filter(p => p.source_id), [matched]);
@@ -109,6 +109,31 @@ export default function LocalizadosPage() {
     if (!ql) return all;
     return all.filter(p => p.name.toLowerCase().includes(ql) || (p.last_seen_location ?? "").toLowerCase().includes(ql));
   }, [all, ql]);
+
+  // Listas tab: group all localizados by their source tweet (hospital list)
+  const groupedByList = useMemo(() => {
+    const map = new Map<string, { label: string; title: string; tweetUrl: string; people: Person[] }>();
+    for (const p of all) {
+      if (!p.source2_url) continue;
+      if (!map.has(p.source2_url)) {
+        map.set(p.source2_url, {
+          label: tweetLabel(p.source2_url),
+          title: sourceTitle(p.external_source),
+          tweetUrl: p.source2_url,
+          people: [],
+        });
+      }
+      map.get(p.source2_url)!.people.push(p);
+    }
+    return Array.from(map.values()).sort((a, b) => b.people.length - a.people.length);
+  }, [all]);
+
+  const filteredLists = useMemo(() => {
+    if (!ql) return groupedByList;
+    return groupedByList
+      .map(g => ({ ...g, people: g.people.filter(p => p.name.toLowerCase().includes(ql)) }))
+      .filter(g => g.people.length > 0);
+  }, [groupedByList, ql]);
 
   function copyAll() {
     let text = `Personas localizadas — SismoVenezuela\n`;
@@ -152,15 +177,25 @@ export default function LocalizadosPage() {
             <button
               onClick={() => setTab("matched")}
               className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === "matched" ? "bg-cyan-900 text-cyan-200" : "text-gray-500 hover:text-gray-300"}`}>
-              🔍 Cruce SismoVenezuela
+              🔍 Cruces
               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab === "matched" ? "bg-cyan-700 text-cyan-100" : "bg-gray-800 text-gray-500"}`}>
                 {confirmedMatched.length}
               </span>
             </button>
             <button
+              onClick={() => setTab("listas")}
+              className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === "listas" ? "bg-amber-900 text-amber-200" : "text-gray-500 hover:text-gray-300"}`}>
+              📋 Listas
+              {groupedByList.length > 0 && (
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab === "listas" ? "bg-amber-700 text-amber-100" : "bg-gray-800 text-gray-500"}`}>
+                  {groupedByList.reduce((s, g) => s + g.people.length, 0)}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => setTab("all")}
               className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === "all" ? "bg-green-900 text-green-200" : "text-gray-500 hover:text-gray-300"}`}>
-              ✓ Todos los localizados
+              ✓ Todos
               {all.length > 0 && (
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab === "all" ? "bg-green-700 text-green-100" : "bg-gray-800 text-gray-500"}`}>
                   {all.length}
@@ -224,6 +259,12 @@ export default function LocalizadosPage() {
 
               <p className="text-gray-600 text-[10px]">⚠️ Los cruces son aproximados — siempre verificar con la fuente original antes de confirmar.</p>
             </div>
+          ) : tab === "listas" ? (
+            <p className="text-gray-400 text-xs leading-relaxed">
+              Listas completas de pacientes publicadas en hospitales, tal como fueron difundidas.{" "}
+              <strong className="text-amber-400">Incluye a todas las personas de cada lista</strong>, estuvieran o no en la base de desaparecidos. Las marcadas con{" "}
+              <span className="text-cyan-400 font-semibold">✓ cruce</span> fueron confirmadas contra la base de datos.
+            </p>
           ) : (
             <p className="text-gray-400 text-xs leading-relaxed">
               Todos los registros con estado <strong className="text-green-400">localizado / encontrado</strong> en nuestra base de datos, de cualquier fuente — nuestro cruce, actualizaciones de plataformas colaboradoras y reportes directos.
@@ -312,6 +353,48 @@ export default function LocalizadosPage() {
                               }
                             </div>
                           </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* Listas tab — full hospital rosters grouped by source tweet */}
+        {!loading && tab === "listas" && (
+          <>
+            {filteredLists.length === 0 && <div className="text-center text-gray-600 py-12 text-sm">Sin listas cargadas</div>}
+            {filteredLists.map((group, gi) => (
+              <div key={gi} className="flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-3 border-b border-amber-900/50 pb-2">
+                  <div className="flex flex-col gap-0.5">
+                    <p className="text-white font-semibold text-sm">{group.title}</p>
+                    <a href={group.tweetUrl} target="_blank" rel="noopener noreferrer"
+                      className="text-amber-500 text-xs hover:underline">
+                      {group.label} — ver publicación original ↗
+                    </a>
+                  </div>
+                  <span className="text-gray-500 text-xs shrink-0">{group.people.length} personas</span>
+                </div>
+                <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden divide-y divide-gray-800">
+                  {group.people.map((p, pi) => {
+                    const wasInDb = !!p.source_id;
+                    return (
+                      <div key={pi} className="px-4 py-2.5 flex items-center gap-3">
+                        <span className="text-gray-600 text-xs w-5 shrink-0">{pi + 1}.</span>
+                        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                          <p className="text-white text-sm font-medium">{p.name}</p>
+                          {(p.age || p.last_seen_location) && (
+                            <p className="text-gray-500 text-xs">
+                              {p.age ? `${p.age} años` : ""}{p.age && p.last_seen_location ? " · " : ""}{p.last_seen_location ?? ""}
+                            </p>
+                          )}
+                        </div>
+                        {wasInDb && (
+                          <span className="text-cyan-400 text-[10px] font-semibold bg-cyan-900/40 border border-cyan-800 px-1.5 py-0.5 rounded shrink-0">✓ cruce</span>
                         )}
                       </div>
                     );
