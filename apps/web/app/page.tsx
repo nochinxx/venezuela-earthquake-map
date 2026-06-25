@@ -294,7 +294,7 @@ export default function Home() {
   const [showMissing, setShowMissing] = useState(false);
   const [missingForm, setMissingForm] = useState({ name: "", age: "", last_seen_location: "", description: "", contact_info: "" });
   const [missingStatus, setMissingStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
-  const [showExternalMissing, setShowExternalMissing] = useState(false);
+  const [showExternalMissing, setShowExternalMissing] = useState(true);
   const [externalMissingTotal, setExternalMissingTotal] = useState<number | null>(null);
   const [externalMissingLoading, setExternalMissingLoading] = useState(false);
   const [selectedExternalPerson, setSelectedExternalPerson] = useState<Record<string, unknown> | null>(null);
