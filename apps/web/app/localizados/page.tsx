@@ -49,6 +49,9 @@ export default function LocalizadosPage() {
   const [all, setAll] = useState<Person[]>([]);
   const [loadingMatched, setLoadingMatched] = useState(true);
   const [loadingAll, setLoadingAll] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [allTotal, setAllTotal] = useState<number | null>(null);
+  const [matchedTotal, setMatchedTotal] = useState<number | null>(null);
   const [q, setQ] = useState("");
   const [copied, setCopied] = useState(false);
   const [showMethod, setShowMethod] = useState(false);
@@ -58,7 +61,11 @@ export default function LocalizadosPage() {
   useEffect(() => {
     fetch(`/api/missing-persons?matched=1&limit=500`)
       .then(r => r.json())
-      .then((res: { data: Person[] }) => { setMatched(res.data ?? []); setLoadingMatched(false); })
+      .then((res: { data: Person[]; total: number }) => {
+        setMatched(res.data ?? []);
+        setMatchedTotal(res.total ?? 0);
+        setLoadingMatched(false);
+      })
       .catch(() => setLoadingMatched(false));
   }, []);
 
@@ -66,11 +73,29 @@ export default function LocalizadosPage() {
   useEffect(() => {
     if ((tab !== "all" && tab !== "listas") || all.length > 0) return;
     setLoadingAll(true);
-    fetch(`/api/missing-persons?status=encontrado&limit=500`)
+    fetch(`/api/missing-persons?status=encontrado&limit=500&offset=0`)
       .then(r => r.json())
-      .then((res: { data: Person[] }) => { setAll(res.data ?? []); setLoadingAll(false); })
+      .then((res: { data: Person[]; total: number }) => {
+        setAll(res.data ?? []);
+        setAllTotal(res.total ?? 0);
+        setLoadingAll(false);
+      })
       .catch(() => setLoadingAll(false));
   }, [tab, all.length]);
+
+  function loadMore() {
+    setLoadingMore(true);
+    fetch(`/api/missing-persons?status=encontrado&limit=500&offset=${all.length}`)
+      .then(r => r.json())
+      .then((res: { data: Person[]; total: number }) => {
+        setAll(prev => [...prev, ...(res.data ?? [])]);
+        setAllTotal(res.total ?? 0);
+        setLoadingMore(false);
+      })
+      .catch(() => setLoadingMore(false));
+  }
+
+  const allHasMore = allTotal != null && all.length < allTotal;
 
   const people = tab === "matched" ? matched : all;
   const loading = tab === "matched" ? loadingMatched : loadingAll || (tab === "listas" && loadingAll);
@@ -196,11 +221,9 @@ export default function LocalizadosPage() {
               onClick={() => setTab("all")}
               className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === "all" ? "bg-green-900 text-green-200" : "text-gray-500 hover:text-gray-300"}`}>
               ✓ Todos
-              {all.length > 0 && (
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab === "all" ? "bg-green-700 text-green-100" : "bg-gray-800 text-gray-500"}`}>
-                  {all.length}
-                </span>
-              )}
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab === "all" ? "bg-green-700 text-green-100" : "bg-gray-800 text-gray-500"}`}>
+                {allTotal ?? (all.length > 0 ? all.length : "")}
+              </span>
             </button>
           </div>
 
@@ -402,6 +425,14 @@ export default function LocalizadosPage() {
                 </div>
               </div>
             ))}
+            {allHasMore && !ql && (
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="w-full py-3 rounded-lg border border-amber-800 text-amber-400 text-sm font-semibold hover:bg-amber-900/30 transition-colors disabled:opacity-50">
+                {loadingMore ? "Cargando..." : `Ver más listas · ${allTotal! - all.length} registros restantes`}
+              </button>
+            )}
           </>
         )}
 
@@ -409,6 +440,12 @@ export default function LocalizadosPage() {
         {!loading && tab === "all" && (
           <>
             {filteredAll.length === 0 && <div className="text-center text-gray-600 py-12 text-sm">Sin resultados</div>}
+            {allTotal != null && (
+              <p className="text-gray-600 text-xs">
+                Mostrando {all.length} de {allTotal} registros
+                {allHasMore ? ` — usa "Ver más" para cargar el resto` : ""}
+              </p>
+            )}
             <div className="flex flex-col gap-2">
               {filteredAll.map((p, i) => {
                 const byUs = String(p.external_source ?? "").includes("SismoVenezuela");
@@ -448,6 +485,14 @@ export default function LocalizadosPage() {
                 );
               })}
             </div>
+            {allHasMore && !ql && (
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="w-full py-3 rounded-lg border border-green-800 text-green-400 text-sm font-semibold hover:bg-green-900/30 transition-colors disabled:opacity-50">
+                {loadingMore ? "Cargando..." : `Ver más · ${allTotal! - all.length} restantes`}
+              </button>
+            )}
           </>
         )}
 
