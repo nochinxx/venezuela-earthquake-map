@@ -4,9 +4,11 @@ youtube.py — Search YouTube for Venezuela earthquake videos and push to the AP
 
 Run: conda run -n agent python scrapers/youtube.py
 """
-import os, json, httpx, subprocess, tempfile
+import os, json, httpx, subprocess, tempfile, sys
 from datetime import datetime, timezone
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
+from guardrails import is_credible, cap_damage
 
 API_URL = os.environ.get("API_URL", "http://localhost:8000")
 
@@ -78,6 +80,11 @@ def push_report(video: dict) -> bool:
     title = video.get("title", "")
     description = video.get("description", "") or ""
     text = f"{title}. {description[:500]}"
+    author = video.get("channel") or video.get("uploader") or ""
+    ok, reason = is_credible(text, author)
+    if not ok:
+        print(f"  [guardrail] {reason}: {title[:60]}")
+        return False
     video_id = video.get("id", "")
     url = f"https://www.youtube.com/watch?v={video_id}"
     thumbnail = video.get("thumbnail") or (
@@ -100,7 +107,7 @@ def push_report(video: dict) -> bool:
         "lat": lat,
         "lng": lng,
         "location_name": location_name,
-        "damage_level": 3,  # default — Gemma classifier will refine
+        "damage_level": cap_damage(3, "youtube", author),
         "post_time": post_time,
     }
 

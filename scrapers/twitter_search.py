@@ -7,7 +7,7 @@ Uses the same persistent browser profile as ~/agent/bin/twitter-fetch.py
 
 Run: conda run -n agent python scrapers/twitter_search.py
 """
-import os, json, time
+import os, json, time, sys
 from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
@@ -16,6 +16,8 @@ load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 from supabase import create_client
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, str(Path(__file__).parent))
+from guardrails import is_credible, cap_damage
 
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
@@ -101,6 +103,11 @@ def push(tweet: dict) -> bool:
     if date_str and date_str[:10] < CUTOFF:
         return False  # too old
     text = tweet.get("text", "")
+    author = tweet.get("author", "")
+    ok, reason = is_credible(text, author)
+    if not ok:
+        print(f"  [guardrail] {reason}: {text[:60]}")
+        return False
     loc, lat, lng = extract_location(text)
     payload = {
         "source": "twitter",
@@ -111,7 +118,7 @@ def push(tweet: dict) -> bool:
         "media_urls": tweet.get("media_urls", []),
         "lat": lat, "lng": lng,
         "location_name": loc,
-        "damage_level": estimate_damage(text),
+        "damage_level": cap_damage(estimate_damage(text), "twitter", author),
         "post_time": date_str or None,
     }
     try:

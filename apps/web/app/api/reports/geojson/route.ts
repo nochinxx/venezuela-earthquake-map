@@ -8,8 +8,9 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from("reports")
-    .select("id,source,source_url,author,text_content,media_urls,lat,lng,location_name,damage_level,post_time,verified")
+    .select("id,source,source_url,author,text_content,media_urls,lat,lng,location_name,damage_level,post_time,verified,flag_count")
     .not("lat", "is", null)
+    .eq("hidden", false)
     .order("post_time", { ascending: false })
     .limit(2000);
 

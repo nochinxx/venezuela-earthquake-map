@@ -31,6 +31,7 @@ interface Report {
   damage_level: number;
   post_time: string;
   verified: boolean;
+  flag_count: number;
 }
 
 const DAMAGE_COLOR: Record<number, string> = {
@@ -61,6 +62,7 @@ export default function Home() {
   const [showSubmit, setShowSubmit] = useState(false);
   const [submitForm, setSubmitForm] = useState({ url: "", location: "", description: "", damage: "3" });
   const [submitStatus, setSubmitStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const clickedCoords = useRef<{ lat: number; lng: number } | null>(null);
 
   function sortReports(rows: Report[], order: SortOrder) {
@@ -341,10 +343,23 @@ export default function Home() {
                       {r.author ? `@${r.author}` : ""}
                       {r.post_time ? ` · ${timeAgo(r.post_time)}` : ""}
                     </span>
-                    <a href={r.source_url} target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-blue-400 hover:text-blue-300">
-                      Ver fuente →
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a href={r.source_url} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-blue-400 hover:text-blue-300">
+                        Ver fuente →
+                      </a>
+                      <button
+                        title="Reportar como falso"
+                        onClick={async () => {
+                          if (flagged.has(r.id)) return;
+                          await fetch(`${API}/reports/${r.id}`, { method: "POST" });
+                          setFlagged(f => new Set(f).add(r.id));
+                          setSelected(sel => sel.filter(s => s.id !== r.id || (s.flag_count ?? 0) < 2));
+                        }}
+                        className={`text-xs transition-colors ${flagged.has(r.id) ? "text-orange-400 cursor-default" : "text-gray-600 hover:text-orange-400"}`}>
+                        {flagged.has(r.id) ? "🚩 reportado" : "🚩"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

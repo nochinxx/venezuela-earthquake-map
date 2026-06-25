@@ -50,6 +50,10 @@ CREATE POLICY "public_read" ON reports
 CREATE POLICY "service_role_write" ON reports
   FOR ALL USING (auth.role() = 'service_role');
 
+-- Moderation columns (run ALTER if table already exists)
+-- ALTER TABLE reports ADD COLUMN IF NOT EXISTS flag_count integer NOT NULL DEFAULT 0;
+-- ALTER TABLE reports ADD COLUMN IF NOT EXISTS hidden boolean NOT NULL DEFAULT false;
+
 -- Casualty statistics from verified sources
 CREATE TABLE IF NOT EXISTS casualty_stats (
   id          serial PRIMARY KEY,

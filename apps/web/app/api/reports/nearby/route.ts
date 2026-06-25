@@ -13,9 +13,10 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from("reports")
-    .select("id,source,source_url,author,text_content,media_urls,lat,lng,location_name,damage_level,post_time")
+    .select("id,source,source_url,author,text_content,media_urls,lat,lng,location_name,damage_level,post_time,flag_count")
     .gte("lat", lat - deg).lte("lat", lat + deg)
     .gte("lng", lng - deg).lte("lng", lng + deg)
+    .eq("hidden", false)
     .order("post_time", { ascending: false })
     .limit(100);
 
