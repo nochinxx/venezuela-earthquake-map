@@ -391,6 +391,53 @@ export default function Home() {
       setReliefCenters(centers);
       renderReliefMarkers(centers);
     }).catch(() => {});
+    fetch(`${API}/building-damage`).then((r) => r.json()).then((geojson) => {
+      if (!geojson?.features) return;
+      setBuildingCount(geojson.features.length);
+      const m = map.current;
+      if (!m) return;
+      const SRC = "building-damage";
+      const LAYER = "building-damage-points";
+      if (m.getSource(SRC)) {
+        (m.getSource(SRC) as mapboxgl.GeoJSONSource).setData(geojson);
+        return;
+      }
+      m.addSource(SRC, { type: "geojson", data: geojson });
+      m.addLayer({
+        id: LAYER,
+        type: "circle",
+        source: SRC,
+        paint: {
+          "circle-color": "#f59e0b",
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 7, 12, 11],
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#fff",
+          "circle-opacity": 0.92,
+        },
+      });
+      m.on("click", LAYER, (e) => {
+        const feat = e.features?.[0];
+        if (!feat) return;
+        const p = feat.properties as Record<string, unknown>;
+        const [lng, lat] = (feat.geometry as GeoJSON.Point).coordinates;
+        if (buildingPopupRef.current) buildingPopupRef.current.remove();
+        const affected = p.affected ? `<br/>👥 ${p.affected} afectados` : "";
+        const confirmed = p.confirmations ? `<br/>✅ ${p.confirmations} confirmaciones` : "";
+        buildingPopupRef.current = new mapboxgl.Popup({ maxWidth: "260px" })
+          .setLngLat([lng, lat])
+          .setHTML(
+            `<div style="font-size:12px;color:#111;padding:2px 0">
+              <strong style="font-size:13px">🏚 ${p.place ?? "Edificio afectado"}</strong>
+              ${p.needs ? `<br/><span style="color:#555">${p.needs}</span>` : ""}
+              ${affected}${confirmed}
+              <br/><span style="color:#999;font-size:10px">${p.source ?? ""}</span>
+            </div>`
+          )
+          .addTo(m);
+      });
+      m.on("mouseenter", LAYER, () => { m.getCanvas().style.cursor = "pointer"; });
+      m.on("mouseleave", LAYER, () => { m.getCanvas().style.cursor = ""; });
+    }).catch(() => {});
     fetch(`${API}/missing-persons?limit=200`).then((r) => r.json()).then((res: { data: MissingPerson[] }) => {
       const persons = res.data ?? [];
       setMissingPersons(persons);
@@ -548,6 +595,13 @@ export default function Home() {
     });
   }, [showRelief]);
 
+  useEffect(() => {
+    missingMarkersRef.current.forEach(m => {
+      const el = m.getElement();
+      el.style.display = showExternalMissing ? "flex" : "none";
+    });
+  }, [showExternalMissing]);
+
   // External missing persons (desaparecidosterremotovenezuela.com)
   useEffect(() => {
     const m = map.current;
@@ -614,69 +668,13 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showExternalMissing]);
 
-  // Building damage layer (terremotovenezuela.app critical reports)
+  // Building damage visibility toggle (layer is set up in loadData)
   useEffect(() => {
     const m = map.current;
-    if (!m || !m.loaded()) return;
-
-    const SRC = "building-damage";
-    const LAYER = "building-damage-points";
-
-    if (!showBuildings) {
-      if (m.getLayer(LAYER)) m.removeLayer(LAYER);
-      if (m.getSource(SRC)) m.removeSource(SRC);
-      setBuildingCount(null);
-      return;
+    if (!m) return;
+    if (m.getLayer("building-damage-points")) {
+      m.setLayoutProperty("building-damage-points", "visibility", showBuildings ? "visible" : "none");
     }
-
-    fetch(`${API}/building-damage`)
-      .then(r => r.json())
-      .then((geojson) => {
-        if (!geojson?.features) return;
-        setBuildingCount(geojson.features.length);
-        if (m.getSource(SRC)) {
-          (m.getSource(SRC) as mapboxgl.GeoJSONSource).setData(geojson);
-          return;
-        }
-        m.addSource(SRC, { type: "geojson", data: geojson });
-        m.addLayer({
-          id: LAYER,
-          type: "circle",
-          source: SRC,
-          paint: {
-            "circle-color": "#f59e0b",
-            "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 7, 12, 11],
-            "circle-stroke-width": 2,
-            "circle-stroke-color": "#fff",
-            "circle-opacity": 0.92,
-          },
-        });
-
-        m.on("click", LAYER, (e) => {
-          const feat = e.features?.[0];
-          if (!feat) return;
-          const p = feat.properties as Record<string, unknown>;
-          const [lng, lat] = (feat.geometry as GeoJSON.Point).coordinates;
-          if (buildingPopupRef.current) buildingPopupRef.current.remove();
-          const affected = p.affected ? `<br/>👥 ${p.affected} afectados` : "";
-          const confirmed = p.confirmations ? `<br/>✅ ${p.confirmations} confirmaciones` : "";
-          const source = `<br/><span style="color:#999;font-size:10px">${p.source ?? ""}</span>`;
-          buildingPopupRef.current = new mapboxgl.Popup({ maxWidth: "260px" })
-            .setLngLat([lng, lat])
-            .setHTML(
-              `<div style="font-size:12px;color:#111;padding:2px 0">
-                <strong style="font-size:13px">🏚 ${p.place ?? "Edificio afectado"}</strong>
-                ${p.needs ? `<br/><span style="color:#555">${p.needs}</span>` : ""}
-                ${affected}${confirmed}${source}
-              </div>`
-            )
-            .addTo(m);
-        });
-        m.on("mouseenter", LAYER, () => { m.getCanvas().style.cursor = "pointer"; });
-        m.on("mouseleave", LAYER, () => { m.getCanvas().style.cursor = ""; });
-      })
-      .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showBuildings]);
 
   // Missing persons panel loader — resets list when filters/search change
