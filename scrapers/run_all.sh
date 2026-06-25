@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run all earthquake scrapers. Called by launchd every 10 minutes.
-set -e
+# No set -e: each scraper runs independently; one failure won't kill the rest.
 
 export PATH="/opt/homebrew/bin:/opt/homebrew/Caskroom/miniforge/base/bin:/usr/local/bin:/usr/bin:/bin"
 
@@ -14,17 +14,17 @@ echo "=== $(date -u '+%Y-%m-%d %H:%M:%S UTC') ===" >> "$LOG"
 cd "$REPO"
 
 echo "[youtube]" >> "$LOG"
-$CONDA scrapers/youtube.py >> "$LOG" 2>&1
+$CONDA scrapers/youtube.py >> "$LOG" 2>&1 || echo "[youtube] FAILED (exit $?)" >> "$LOG"
 
 echo "[twitter]" >> "$LOG"
-$CONDA scrapers/twitter_search.py >> "$LOG" 2>&1
+$CONDA scrapers/twitter_search.py >> "$LOG" 2>&1 || echo "[twitter] FAILED (exit $?)" >> "$LOG"
 
 echo "[instagram]" >> "$LOG"
-$CONDA scrapers/instagram_search.py >> "$LOG" 2>&1
+$CONDA scrapers/instagram_search.py >> "$LOG" 2>&1 || echo "[instagram] FAILED (exit $?)" >> "$LOG"
 
 # Transcription runs every 3rd cycle (~30 min) — subtitles take time to generate
 MINUTE=$(date +%M)
-if [ "$MINUTE" -lt 10 ] || [ "$MINUTE" -gt 40 ] && [ "$MINUTE" -lt 50 ]; then
+if [ "$MINUTE" -lt 10 ] || { [ "$MINUTE" -gt 40 ] && [ "$MINUTE" -lt 50 ]; }; then
     echo "[transcribe]" >> "$LOG"
-    $CONDA scrapers/transcribe_youtube.py >> "$LOG" 2>&1
+    $CONDA scrapers/transcribe_youtube.py >> "$LOG" 2>&1 || echo "[transcribe] FAILED (exit $?)" >> "$LOG"
 fi
