@@ -13,6 +13,7 @@ interface Person {
   status: string;
   external_source?: string | null;
   source2_url?: string | null;
+  source_id?: string | null;
   submitted_at?: string | null;
 }
 
@@ -256,18 +257,27 @@ export default function LocalizadosPage() {
                   {group.people.map((p, pi) => (
                     <div key={pi} className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 flex items-start gap-3">
                       <div className="w-8 h-8 rounded-full bg-cyan-900/60 border border-cyan-700 flex items-center justify-center text-cyan-400 text-sm shrink-0 mt-0.5">✓</div>
-                      <div className="flex flex-col gap-0.5 min-w-0">
+                      <div className="flex flex-col gap-1 min-w-0">
                         <p className="font-semibold text-white text-sm">{p.name}</p>
                         {p.age && <p className="text-gray-500 text-xs">{p.age} años</p>}
                         {p.last_seen_location && <p className="text-gray-400 text-xs">📍 {p.last_seen_location}</p>}
-                        <div className="flex items-center gap-3 mt-1 flex-wrap">
-                          <p className="text-cyan-400 text-[10px] font-medium">🔍 Cruce SismoVenezuela</p>
-                          {p.source2_url && (
-                            <a href={p.source2_url} target="_blank" rel="noopener noreferrer"
-                              className="text-cyan-500 text-xs hover:text-cyan-300 hover:underline font-medium">
-                              Ver lista hospitalaria ↗
-                            </a>
-                          )}
+                        <div className="flex flex-col gap-0.5 mt-0.5 border-t border-gray-800 pt-1.5">
+                          {/* Original missing report source */}
+                          {p.source_id
+                            ? <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer"
+                                className="text-violet-400 text-xs hover:text-violet-200 hover:underline">
+                                📋 Reportado como desaparecido en desaparecidosterremotovenezuela.com ↗
+                              </a>
+                            : <p className="text-gray-500 text-xs">📋 Reportado en lista hospitalaria · sin registro previo en plataformas</p>
+                          }
+                          {/* Confirmation source — hospital tweet */}
+                          {p.source2_url
+                            ? <a href={p.source2_url} target="_blank" rel="noopener noreferrer"
+                                className="text-cyan-500 text-xs hover:text-cyan-300 hover:underline">
+                                🏥 Confirmado: {group.title} ↗
+                              </a>
+                            : <p className="text-cyan-400 text-xs">🏥 {group.title}</p>
+                          }
                         </div>
                       </div>
                     </div>

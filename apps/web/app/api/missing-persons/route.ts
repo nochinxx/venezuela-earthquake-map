@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const matched = searchParams.get("matched") === "1";
 
   let base = supabase.from("missing_persons").select(
-    countOnly ? "id" : "id,name,age,last_seen_location,lat,lng,description,contact_info,submitted_at,photo_url,status,external_source,source2_url",
+    countOnly ? "id" : "id,name,age,last_seen_location,lat,lng,description,contact_info,submitted_at,photo_url,status,external_source,source2_url,source_id",
     { count: "exact" }
   ).or("is_duplicate.eq.false,is_duplicate.is.null");
 
