@@ -245,6 +245,10 @@ export default function Home() {
   const missingMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [walkthroughStep, setWalkthroughStep] = useState(0);
+
+  useEffect(() => {
+    if (!localStorage.getItem("wt_seen")) setShowWalkthrough(true);
+  }, []);
   const [showEmergencyDir, setShowEmergencyDir] = useState(false);
   const clickedCoords = useRef<{ lat: number; lng: number } | null>(null);
 
@@ -865,11 +869,12 @@ export default function Home() {
 
       {/* Walkthrough modal */}
       {showWalkthrough && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) { localStorage.setItem("wt_seen","1"); setShowWalkthrough(false); } }}>
           <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm p-6 flex flex-col gap-5">
             <div className="flex justify-between items-center">
               <span className="text-gray-500 text-xs">{walkthroughStep + 1} / {WALKTHROUGH_STEPS.length}</span>
-              <button onClick={() => setShowWalkthrough(false)} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+              <button onClick={() => { localStorage.setItem("wt_seen","1"); setShowWalkthrough(false); }} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
             </div>
 
             <div className="flex flex-col items-center text-center gap-3">
@@ -897,7 +902,7 @@ export default function Home() {
                   Siguiente →
                 </button>
               ) : (
-                <button onClick={() => setShowWalkthrough(false)}
+                <button onClick={() => { localStorage.setItem("wt_seen","1"); setShowWalkthrough(false); }}
                   className="flex-1 py-2 rounded bg-red-600 hover:bg-red-500 text-white text-sm font-semibold">
                   Entendido ✓
                 </button>
