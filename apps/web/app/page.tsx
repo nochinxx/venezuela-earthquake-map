@@ -1377,7 +1377,7 @@ export default function Home() {
               {casualties?.deaths != null && (
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-gray-400 text-xs">Fallecidos</span>
-                  <span className="text-red-400 font-bold text-xs">{casualties.deaths.toLocaleString()}</span>
+                  <span className="text-red-400 font-bold text-xs">{casualties.deaths.toLocaleString()}+</span>
                 </div>
               )}
               {casualties?.injured != null && (
