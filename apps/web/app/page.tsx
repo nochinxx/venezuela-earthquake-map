@@ -93,6 +93,11 @@ const WALKTHROUGH_STEPS = [
     title: "Actualización automática",
     desc: "El mapa se alimenta de YouTube, X/Twitter e Instagram cada 10 minutos. Recarga la página para ver lo más reciente. Las cifras de víctimas se actualizan desde fuentes verificadas.",
   },
+  {
+    icon: "📞",
+    title: "Números de emergencia",
+    desc: "En la esquina inferior izquierda siempre están visibles los números de emergencia: 911 (nacional), 166 (Protección Civil), 167 (Bomberos).",
+  },
 ];
 
 const LOCATIONS_MAP: Record<string, [number, number]> = {
@@ -563,21 +568,41 @@ export default function Home() {
           </div>
         )}
 
-        <div className="absolute bottom-8 left-4 bg-gray-900/90 rounded p-3 text-xs flex flex-col gap-1.5 z-10">
-          <p className="font-semibold text-gray-300 mb-1">Nivel de daño</p>
-          {Object.entries(DAMAGE_COLOR).map(([lvl, color]) => (
-            <div key={lvl} className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full" style={{ background: color }} />
-              <span className="text-gray-400">{DAMAGE_LABEL[Number(lvl)]}</span>
+        <div className="absolute bottom-8 left-4 flex flex-col gap-2 z-10">
+          {/* Emergency numbers */}
+          <div className="bg-red-950/95 border border-red-700 rounded p-3 text-xs flex flex-col gap-1.5">
+            <p className="font-bold text-red-300 mb-0.5 uppercase tracking-wide">📞 Emergencias Venezuela</p>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-gray-400">Emergencia nacional</span>
+              <span className="font-bold text-white">911</span>
             </div>
-          ))}
-          <div className="border-t border-gray-700 mt-1 pt-1.5 flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-500" />
-            <span className="text-gray-400">Centro de acopio</span>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-gray-400">Protección Civil</span>
+              <span className="font-bold text-white">166</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-gray-400">Bomberos</span>
+              <span className="font-bold text-white">167</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-orange-500" />
-            <span className="text-gray-400">Desaparecido</span>
+
+          {/* Damage legend */}
+          <div className="bg-gray-900/90 rounded p-3 text-xs flex flex-col gap-1.5">
+            <p className="font-semibold text-gray-300 mb-1">Nivel de daño</p>
+            {Object.entries(DAMAGE_COLOR).map(([lvl, color]) => (
+              <div key={lvl} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ background: color }} />
+                <span className="text-gray-400">{DAMAGE_LABEL[Number(lvl)]}</span>
+              </div>
+            ))}
+            <div className="border-t border-gray-700 mt-1 pt-1.5 flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-green-500" />
+              <span className="text-gray-400">Centro de acopio</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-orange-500" />
+              <span className="text-gray-400">Desaparecido</span>
+            </div>
           </div>
         </div>
       </div>
