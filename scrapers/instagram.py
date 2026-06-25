@@ -1,36 +1,40 @@
 #!/usr/bin/env python3
 """
-instagram.py — Scrape earthquake posts via instaloader and push to Supabase.
+instagram.py — Scrape earthquake Instagram posts via yt-dlp and push to Supabase.
 
 Setup (one-time):
-  pip install instaloader
-  instaloader --login YOUR_BURNER_ACCOUNT   # saves session to ~/.config/instaloader/
+  1. Log into Instagram in your browser (Chrome/Firefox)
+  2. yt-dlp will read cookies directly from the browser — no manual export needed
 
 Run: python scrapers/instagram.py
+  Or with explicit cookies file:
+  INSTAGRAM_COOKIES=/path/to/cookies.txt python scrapers/instagram.py
 """
-import os, json
+import os, json, subprocess, tempfile, httpx
 from datetime import datetime, timezone
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
-
-try:
-    import instaloader
-    HAS_INSTALOADER = True
-except ImportError:
-    HAS_INSTALOADER = False
+load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 from supabase import create_client
 
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
-IG_USERNAME = os.environ.get("IG_USERNAME", "")
+
+YT_DLP = os.environ.get(
+    "YT_DLP_PATH",
+    "/opt/homebrew/Caskroom/miniforge/base/envs/agent/bin/yt-dlp"
+)
+IG_BROWSER = os.environ.get("IG_BROWSER", "chrome")  # chrome, firefox, safari
+COOKIES_FILE = os.environ.get("INSTAGRAM_COOKIES", "")
 
 HASHTAGS = [
     "TemblorVenezuela",
     "SismoVenezuela",
     "TemblorEnVenezuela",
-    "VenezuelaEarthquake",
     "TerremotoVenezuela",
+    "VenezuelaEarthquake",
+    "DañosVenezuela",
 ]
 
 LOCATIONS = {
@@ -42,9 +46,12 @@ LOCATIONS = {
     "maturin": (9.7450, -63.1800), "petare": (10.4800, -66.8000),
     "miranda": (10.3000, -66.6000), "vargas": (10.6000, -67.1000),
     "cumana": (10.4574, -64.1744), "falcon": (11.2, -69.7),
+    "lara": (10.0647, -69.3571), "portuguesa": (9.0940, -69.4420),
+    "aragua": (10.2603, -67.5894), "guarenas": (10.4667, -66.5333),
+    "la guaira": (10.6013, -66.9337), "los teques": (10.3372, -67.0400),
 }
 
-CUTOFF = datetime(2026, 6, 24, tzinfo=timezone.utc)
+CUTOFF_DATE = "20260624"
 
 
 def extract_location(text):
@@ -57,27 +64,68 @@ def extract_location(text):
 
 def estimate_damage(text):
     t = (text or "").lower()
-    if any(w in t for w in ["colaps", "derrumb", "destrui", "cayó"]):
+    if any(w in t for w in ["colaps", "derrumb", "destrui", "cayó", "caído", "demolid"]):
         return 5
-    if any(w in t for w in ["grave", "severo"]):
+    if any(w in t for w in ["grave", "severo", "destrucc"]):
         return 4
-    if any(w in t for w in ["daño", "grieta", "afectad"]):
+    if any(w in t for w in ["daño", "grieta", "afectad", "rajad"]):
         return 3
     return 2
 
 
-def push(post_url, author, caption, media_url, post_time):
+def build_yt_dlp_cmd(url: str) -> list[str]:
+    cmd = [YT_DLP, url, "--dump-json", "--flat-playlist", "--no-download",
+           "--dateafter", CUTOFF_DATE]
+    if COOKIES_FILE:
+        cmd += ["--cookies", COOKIES_FILE]
+    else:
+        cmd += ["--cookies-from-browser", IG_BROWSER]
+    return cmd
+
+
+def scrape_hashtag(tag: str) -> list[dict]:
+    url = f"https://www.instagram.com/explore/tags/{tag}/"
+    result = subprocess.run(
+        build_yt_dlp_cmd(url),
+        capture_output=True, text=True, timeout=60,
+        env={**os.environ, "PATH": "/opt/homebrew/bin:" + os.environ.get("PATH", "")},
+    )
+    posts = []
+    for line in result.stdout.strip().splitlines():
+        try:
+            posts.append(json.loads(line))
+        except Exception:
+            pass
+    return posts
+
+
+def push(post: dict) -> bool:
+    title = post.get("title", "") or ""
+    description = post.get("description", "") or ""
+    caption = f"{title} {description}".strip()
+    post_id = post.get("id", "")
+    url = post.get("webpage_url") or f"https://www.instagram.com/p/{post_id}/"
+    thumbnail = post.get("thumbnail")
+
+    upload_date = post.get("upload_date", "")
+    post_time = None
+    if upload_date and len(upload_date) == 8:
+        post_time = datetime.strptime(upload_date, "%Y%m%d").replace(tzinfo=timezone.utc).isoformat()
+        if upload_date < CUTOFF_DATE:
+            return False  # too old
+
     loc, lat, lng = extract_location(caption)
     payload = {
         "source": "instagram",
-        "source_url": post_url,
-        "author": author,
-        "text_content": (caption or "")[:1000],
-        "media_urls": [media_url] if media_url else [],
+        "source_url": url,
+        "source_id": post_id,
+        "author": post.get("uploader") or post.get("channel"),
+        "text_content": caption[:1000] or title,
+        "media_urls": [thumbnail] if thumbnail else [],
         "lat": lat, "lng": lng,
         "location_name": loc,
         "damage_level": estimate_damage(caption),
-        "post_time": post_time.isoformat() if post_time else None,
+        "post_time": post_time,
     }
     try:
         sb.table("reports").upsert(
@@ -91,42 +139,15 @@ def push(post_url, author, caption, media_url, post_time):
 
 
 def main():
-    if not HAS_INSTALOADER:
-        print("[instagram] instaloader not installed — run: pip install instaloader")
-        return
-    if not IG_USERNAME:
-        print("[instagram] IG_USERNAME not set in scrapers/.env")
-        print("  1. Create a burner Instagram account")
-        print("  2. Run: instaloader --login YOUR_USERNAME  (saves session)")
-        print("  3. Add to scrapers/.env: IG_USERNAME=your_username")
-        return
-
-    L = instaloader.Instaloader(download_pictures=False, download_videos=False,
-                                  download_video_thumbnails=False, save_metadata=False,
-                                  quiet=True)
-    try:
-        L.load_session_from_file(IG_USERNAME)
-    except Exception:
-        print(f"[instagram] No saved session for {IG_USERNAME} — run: instaloader --login {IG_USERNAME}")
-        return
-
+    print(f"[instagram] {len(HASHTAGS)} hashtags | browser: {IG_BROWSER}")
     total = 0
     for tag in HASHTAGS:
         print(f"  #{tag}")
-        try:
-            hashtag = instaloader.Hashtag.from_name(L.context, tag)
-            for post in hashtag.get_posts():
-                if post.date_utc < CUTOFF.replace(tzinfo=None):
-                    break  # posts are newest-first, stop when we go past cutoff
-                url = f"https://www.instagram.com/p/{post.shortcode}/"
-                media = post.url if not post.is_video else post.video_url
-                if push(url, post.owner_username, post.caption, media, post.date_utc.replace(tzinfo=timezone.utc)):
-                    total += 1
-                if total > 200:
-                    break
-        except Exception as e:
-            print(f"  [error] {e}")
-
+        posts = scrape_hashtag(tag)
+        print(f"    {len(posts)} posts found")
+        for p in posts:
+            if push(p):
+                total += 1
     print(f"[instagram] Done — {total} pushed")
 
 
