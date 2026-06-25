@@ -603,6 +603,12 @@ export default function Home() {
               className="px-2.5 py-1 rounded text-xs bg-red-700 hover:bg-red-600 text-white font-semibold">
               + Reportar
             </button>
+            <a href="https://ko-fi.com/venezuelaearthquakemap" target="_blank" rel="noopener noreferrer"
+              className="px-2 py-0.5 rounded text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 hidden sm:inline-flex items-center gap-1"
+              title="Apoya este proyecto">
+              ☕ Donar
+            </a>
+
             <button onClick={() => { setShowWalkthrough(true); setWalkthroughStep(0); }}
               className="w-7 h-7 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-bold flex items-center justify-center shrink-0"
               title="¿Cómo usar el mapa?">
