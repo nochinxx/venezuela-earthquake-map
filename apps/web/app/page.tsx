@@ -1666,6 +1666,40 @@ export default function Home() {
                 </div>
               ))}
 
+              {/* Methodology / FAQ */}
+              <div className="border-t border-gray-800 pt-4 flex flex-col gap-3">
+                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">¿Cómo funciona este mapa?</p>
+                <div className="flex flex-col gap-2.5 text-xs text-gray-400 leading-relaxed">
+                  <div>
+                    <span className="text-white font-medium">🔄 Frecuencia de actualización</span><br/>
+                    Reportes de redes sociales: cada 10 min · Edificios, desaparecidos, acopios: cada 30 min · Deduplicación: cada 60 min
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">🧍 ¿Qué significa "desaparecido"?</span><br/>
+                    Pérdida de contacto, no víctima confirmada. La mayoría son personas que no pueden comunicarse por fallas en la red. Muchos ya fueron encontrados pero el reporte sigue activo.
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">🔁 ¿Cómo evitan los duplicados?</span><br/>
+                    Los 20K registros crudos de 2 plataformas se cruzan por número de teléfono y similitud de nombre (modelo local Gemma 3). Los duplicados se excluyen — quedan ~11.5K registros únicos. El proceso tiene un margen de error estimado del 2–5%.
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">📍 ¿Los puntos son exactos?</span><br/>
+                    Los marcadores de desaparecidos se ubican por ciudad/barrio, no por dirección. Los edificios afectados sí tienen coordenadas exactas de terremotovenezuela.com.
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">📢 ¿Los reportes del heatmap son verificados?</span><br/>
+                    No. Son posts públicos de YouTube, X e Instagram filtrados por palabras clave. Representan percepción ciudadana, no daño confirmado.
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">🔓 Código abierto</span><br/>
+                    Todo el código, scrapers y lógica de deduplicación son auditables.{" "}
+                    <a href="https://github.com/nochinxx/venezuela-earthquake-map" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">Ver repositorio →</a>
+                    {" · "}
+                    <a href="https://github.com/nochinxx/venezuela-earthquake-map/blob/main/METHODOLOGY.md" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">Metodología completa →</a>
+                  </div>
+                </div>
+              </div>
+
               <div className="border-t border-gray-800 pt-3">
                 <p className="text-gray-600 text-xs text-center">
                   ¿Tienes una plataforma de respuesta? Escríbenos para ser incluidos.
