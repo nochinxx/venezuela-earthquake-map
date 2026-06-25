@@ -5,7 +5,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q")?.trim() || "";
   const status = searchParams.get("status") || "";
-  const limit = Math.min(parseInt(searchParams.get("limit") || "100"), 200);
+  const limit = Math.min(parseInt(searchParams.get("limit") || "100"), 500);
   const offset = parseInt(searchParams.get("offset") || "0");
   const countOnly = searchParams.get("count") === "1";
 

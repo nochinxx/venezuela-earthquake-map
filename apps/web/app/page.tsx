@@ -1197,24 +1197,31 @@ export default function Home() {
                         </div>
                         {p.last_seen_location ? <p className="text-gray-400 text-xs truncate">📍 {p.last_seen_location}</p> : null}
                         {p.contact_info ? <p className="text-gray-500 text-xs truncate">☎ {p.contact_info}</p> : null}
-                        {p.external_source && String(p.external_source).includes("SismoVenezuela") && (
-                          <p className="text-[10px] text-cyan-400 font-medium">🔍 Cruce de datos por SismoVenezuela</p>
-                        )}
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {p.source2_url && String(p.external_source || "").includes("SismoVenezuela") && (
-                            <a href={String(p.source2_url)} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-500 hover:text-cyan-300">
-                              ver fuente →
-                            </a>
+                        <div className="flex flex-col gap-0.5 mt-0.5">
+                          {String(p.external_source ?? "").includes("SismoVenezuela") && (
+                            <p className="text-[10px] text-cyan-400 font-medium">🔍 Cruce de datos por SismoVenezuela</p>
                           )}
-                          {p.external_source && !String(p.external_source).includes("SismoVenezuela") && (
-                            <a href={p.source2_url || (p.external_source === "desaparecidos-vzla" ? "https://desaparecidosterremotovenezuela.com" : "https://venezuelatebusca.com")}
-                              target="_blank" rel="noopener noreferrer" className="text-xs text-violet-400 hover:text-violet-300">
-                              {p.external_source === "venezulatebusca" ? "venezulatebusca.com" : "desaparecidos.com"} →
+                          {/* Source platform link */}
+                          {p.external_source && !String(p.external_source).includes("SismoVenezuela") && (() => {
+                            const isDesap = String(p.external_source).includes("desaparecidos");
+                            const platformUrl = isDesap ? "https://desaparecidosterremotovenezuela.com" : "https://venezulatebusca.com";
+                            const platformLabel = isDesap ? "desaparecidosterremotovenezuela.com" : "venezulatebusca.com";
+                            return (
+                              <a href={platformUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-400 hover:text-violet-200">
+                                📋 Fuente: {platformLabel} ↗
+                              </a>
+                            );
+                          })()}
+                          {/* Direct report link — source2_url is the tweet / hospital list that reported them */}
+                          {p.source2_url && (
+                            <a href={String(p.source2_url)} target="_blank" rel="noopener noreferrer"
+                              className={`text-xs hover:underline ${String(p.external_source ?? "").includes("SismoVenezuela") ? "text-cyan-500 hover:text-cyan-300" : "text-violet-500 hover:text-violet-300"}`}>
+                              Ver reporte original ↗
                             </a>
                           )}
                           {p.lat && p.lng && (
                             <button onClick={() => { map.current?.flyTo({ center: [p.lng!, p.lat!], zoom: 14, duration: 1000 }); setPanelTab(null); }}
-                              className="text-xs text-gray-500 hover:text-gray-300">ver en mapa</button>
+                              className="text-xs text-gray-500 hover:text-gray-300 text-left">ver en mapa →</button>
                           )}
                         </div>
                       </div>
@@ -1508,8 +1515,21 @@ export default function Home() {
                         <span className={`text-xs px-1 py-0.5 rounded w-fit ${(p.status === "encontrado" || p.status === "localizado") ? "bg-green-900 text-green-300" : "bg-orange-900/50 text-orange-400"}`}>
                           {(p.status === "encontrado" || p.status === "localizado") ? "✓ Localizado" : "Sin contacto"}
                         </span>
-                        {p.external_source && String(p.external_source).includes("SismoVenezuela") && (
+                        {String(p.external_source ?? "").includes("SismoVenezuela") && (
                           <p className="text-[10px] text-cyan-400">🔍 Cruce SismoVenezuela</p>
+                        )}
+                        {p.external_source && !String(p.external_source).includes("SismoVenezuela") && (() => {
+                          const isDesap = String(p.external_source).includes("desaparecidos");
+                          return (
+                            <a href={isDesap ? "https://desaparecidosterremotovenezuela.com" : "https://venezulatebusca.com"}
+                              target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-400 hover:text-violet-200">
+                              {isDesap ? "desaparecidos.com ↗" : "venezulatebusca.com ↗"}
+                            </a>
+                          );
+                        })()}
+                        {p.source2_url && (
+                          <a href={String(p.source2_url)} target="_blank" rel="noopener noreferrer"
+                            className="text-[10px] text-blue-400 hover:text-blue-200">Ver reporte original ↗</a>
                         )}
                       </div>
                     </div>

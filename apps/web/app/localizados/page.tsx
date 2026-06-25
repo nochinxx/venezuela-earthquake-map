@@ -52,7 +52,7 @@ export default function LocalizadosPage() {
 
   // Load matched (our cross-references) on mount
   useEffect(() => {
-    fetch(`/api/missing-persons?matched=1&limit=200`)
+    fetch(`/api/missing-persons?matched=1&limit=500`)
       .then(r => r.json())
       .then((res: { data: Person[] }) => { setMatched(res.data ?? []); setLoadingMatched(false); })
       .catch(() => setLoadingMatched(false));
@@ -62,7 +62,7 @@ export default function LocalizadosPage() {
   useEffect(() => {
     if (tab !== "all" || all.length > 0) return;
     setLoadingAll(true);
-    fetch(`/api/missing-persons?status=encontrado&limit=200`)
+    fetch(`/api/missing-persons?status=encontrado&limit=500`)
       .then(r => r.json())
       .then((res: { data: Person[] }) => { setAll(res.data ?? []); setLoadingAll(false); })
       .catch(() => setLoadingAll(false));
