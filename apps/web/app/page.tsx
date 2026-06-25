@@ -447,6 +447,7 @@ export default function Home() {
           ? `https://terremotovenezuela.com/edificio/${extId}`
           : (SOURCE_URL[src ?? ""] ?? null);
         const srcLink = directUrl ? `<br/><a href="${directUrl}" target="_blank" style="color:#1d9bf0;font-size:10px;text-decoration:underline">Ver ficha completa →</a>` : "";
+        setPanelTab("edificios");
         buildingPopupRef.current = new mapboxgl.Popup({ maxWidth: "280px" })
           .setLngLat([lng, lat])
           .setHTML(
