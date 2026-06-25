@@ -10,6 +10,8 @@ interface Person {
   age?: number | null;
   last_seen_location?: string | null;
   description?: string | null;
+  contact_info?: string | null;
+  photo_url?: string | null;
   status: string;
   external_source?: string | null;
   source2_url?: string | null;
@@ -260,48 +262,54 @@ export default function LocalizadosPage() {
                 <div className="flex flex-col gap-2">
                   {group.people.map((p, pi) => {
                     const isExpanded = expandedId === p.id;
-                    const apiUrl = `https://desaparecidosterremotovenezuela.com/?persona=${p.source_id}`;
                     return (
                       <div key={pi} className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-                        {/* Clickable header row */}
+                        {/* Collapsed row */}
                         <button
-                          className="w-full px-4 py-3 flex items-start gap-3 text-left hover:bg-gray-800/40 transition-colors"
+                          className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-800/40 transition-colors"
                           onClick={() => setExpandedId(isExpanded ? null : p.id)}>
-                          <div className="w-8 h-8 rounded-full bg-cyan-900/60 border border-cyan-700 flex items-center justify-center text-cyan-400 text-sm shrink-0 mt-0.5">✓</div>
+                          {p.photo_url
+                            // eslint-disable-next-line @next/next/no-img-element
+                            ? <img src={p.photo_url} alt={p.name} className="w-10 h-10 rounded-full object-cover border border-cyan-700 shrink-0" />
+                            : <div className="w-10 h-10 rounded-full bg-cyan-900/60 border border-cyan-700 flex items-center justify-center text-cyan-400 text-sm shrink-0">✓</div>
+                          }
                           <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                             <p className="font-semibold text-white text-sm">{p.name}</p>
-                            {p.age && <p className="text-gray-500 text-xs">{p.age} años</p>}
-                            {p.last_seen_location && <p className="text-gray-400 text-xs">📍 {p.last_seen_location}</p>}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {p.age && <span className="text-gray-500 text-xs">{p.age} años</span>}
+                              {p.last_seen_location && <span className="text-gray-400 text-xs">📍 {p.last_seen_location}</span>}
+                            </div>
                           </div>
-                          <span className="text-gray-600 text-xs shrink-0 mt-1">{isExpanded ? "▲" : "▼"}</span>
+                          <span className="text-gray-600 text-xs shrink-0">{isExpanded ? "▲" : "▼"}</span>
                         </button>
 
-                        {/* Expanded detail */}
+                        {/* Expanded — full card from our DB */}
                         {isExpanded && (
-                          <div className="px-4 pb-3 flex flex-col gap-2 border-t border-gray-800">
-                            {p.description && (
-                              <p className="text-gray-400 text-xs mt-2 leading-relaxed">{p.description}</p>
+                          <div className="border-t border-gray-800 px-4 py-3 flex flex-col gap-3">
+                            {p.photo_url && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.photo_url} alt={p.name} className="w-full max-h-52 object-cover rounded-lg border border-gray-700" />
                             )}
-                            <div className="flex flex-col gap-1.5 mt-1">
-                              {/* Missing report source */}
-                              <div className="flex flex-col gap-0.5">
-                                <p className="text-gray-600 text-[10px] uppercase tracking-wide">Reporte de desaparecido</p>
-                                <a href={apiUrl} target="_blank" rel="noopener noreferrer"
-                                  className="text-violet-400 text-xs hover:text-violet-200 hover:underline">
-                                  📋 Ver ficha en desaparecidosterremotovenezuela.com ↗
-                                </a>
-                              </div>
-                              {/* Hospital confirmation */}
-                              <div className="flex flex-col gap-0.5">
-                                <p className="text-gray-600 text-[10px] uppercase tracking-wide">Confirmación hospitalaria</p>
-                                {p.source2_url
-                                  ? <a href={p.source2_url} target="_blank" rel="noopener noreferrer"
-                                      className="text-cyan-500 text-xs hover:text-cyan-300 hover:underline">
-                                      🏥 {group.title} ↗
-                                    </a>
-                                  : <p className="text-cyan-400 text-xs">🏥 {group.title}</p>
-                                }
-                              </div>
+                            {p.description && (
+                              <p className="text-gray-300 text-sm leading-relaxed">{p.description}</p>
+                            )}
+                            {p.contact_info && (
+                              <p className="text-amber-300 text-sm">☎ {p.contact_info}</p>
+                            )}
+                            <div className="border-t border-gray-800 pt-2 flex flex-col gap-1">
+                              <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-0.5">Fuentes</p>
+                              <span className="text-gray-500 text-xs">
+                                📋 Reportado como desaparecido en{" "}
+                                <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer"
+                                  className="text-violet-400 hover:underline">desaparecidosterremotovenezuela.com ↗</a>
+                              </span>
+                              {p.source2_url
+                                ? <a href={p.source2_url} target="_blank" rel="noopener noreferrer"
+                                    className="text-cyan-500 text-xs hover:text-cyan-300 hover:underline">
+                                    🏥 Confirmado: {group.title} ↗
+                                  </a>
+                                : <span className="text-cyan-400 text-xs">🏥 Confirmado: {group.title}</span>
+                              }
                             </div>
                           </div>
                         )}
