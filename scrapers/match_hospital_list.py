@@ -64,12 +64,11 @@ def load_missing() -> list[dict]:
     return records
 
 
-def run(names: list[str], hospital: str, tweet_url: str, source_label: str, dry_run: bool = False):
+def run(names: list[str], hospital: str, tweet_url: str, source_label: str, dry_run: bool = False, high_only: bool = False):
     print(f"\nLoading missing persons DB...")
     missing = load_missing()
     print(f"  {len(missing)} records loaded")
 
-    ext_source = f"SismoVenezuela via {source_label}"
     results = {"high": [], "medium": [], "no_match": []}
 
     for name in names:
@@ -102,6 +101,13 @@ def run(names: list[str], hospital: str, tweet_url: str, source_label: str, dry_
         for name, score, rec in results["medium"]:
             print(f"  [{score:.2f}] '{name}' ↔ '{rec['name']}' (id={rec['id']}, src={rec['external_source']})")
 
+    if high_only and results["medium"]:
+        print(f"\n[high-only] Skipping {len(results['medium'])} medium-confidence matches — treating as no-match:")
+        for name, score, rec in results["medium"]:
+            print(f"  ✗ skipped: '{name}' ↔ '{rec['name']}' ({score:.2f}) → will insert as new")
+        results["no_match"].extend(n for n, _, _ in results["medium"])
+        results["medium"] = []
+
     if dry_run:
         print("\n[dry-run] No changes written.")
         return
@@ -110,6 +116,8 @@ def run(names: list[str], hospital: str, tweet_url: str, source_label: str, dry_
     inserted = 0
 
     for name, score, rec in results["high"] + results["medium"]:
+        confidence = "high" if score >= HIGH else "medium"
+        ext_source = f"SismoVenezuela:{confidence} via {source_label}"
         # Update existing record — preserve source_id (original platform link)
         sb.table("missing_persons").update({
             "status": "localizado",
@@ -118,15 +126,16 @@ def run(names: list[str], hospital: str, tweet_url: str, source_label: str, dry_
             # source_id is NOT overwritten — it keeps the original platform reference
         }).eq("id", rec["id"]).execute()
         updated += 1
-        print(f"  ✓ updated: {rec['name']} (score={score:.2f})")
+        print(f"  ✓ updated: {rec['name']} (score={score:.2f}, confidence={confidence})")
 
     for name in results["no_match"]:
-        # Insert new localizado record with hospital as source
+        # Insert new localizado record with hospital as source (no DB match, so no confidence level)
+        ext_source_new = f"SismoVenezuela via {source_label}"
         sb.table("missing_persons").insert({
             "name": name,
             "last_seen_location": hospital,
             "status": "localizado",
-            "external_source": ext_source,
+            "external_source": ext_source_new,
             "source2_url": tweet_url,
         }).execute()
         inserted += 1
@@ -142,7 +151,8 @@ if __name__ == "__main__":
     parser.add_argument("--tweet", required=True, help="URL of the tweet that published this patient list")
     parser.add_argument("--source-label", required=True, help="Short hospital label for external_source field")
     parser.add_argument("--dry-run", action="store_true", help="Print matches without writing to DB")
+    parser.add_argument("--high-only", action="store_true", help="Only update high-confidence matches; insert medium as new records")
     args = parser.parse_args()
 
     names = [n.strip() for n in args.names.split(",") if n.strip()]
-    run(names, args.hospital, args.tweet, args.source_label, dry_run=args.dry_run)
+    run(names, args.hospital, args.tweet, args.source_label, dry_run=args.dry_run, high_only=args.high_only)

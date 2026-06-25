@@ -136,10 +136,12 @@ export default function LocalizadosPage() {
   }, [all, ql]);
 
   // Listas tab: group all localizados by their source tweet (hospital list)
+  // Only tweet URLs (x.com/twitter.com) — exclude platform homepages like venezuelatebusca.com
   const groupedByList = useMemo(() => {
     const map = new Map<string, { label: string; title: string; tweetUrl: string; people: Person[] }>();
     for (const p of all) {
       if (!p.source2_url) continue;
+      if (!p.source2_url.includes("x.com") && !p.source2_url.includes("twitter.com")) continue;
       if (!map.has(p.source2_url)) {
         map.set(p.source2_url, {
           label: tweetLabel(p.source2_url),
@@ -161,18 +163,23 @@ export default function LocalizadosPage() {
   }, [groupedByList, ql]);
 
   function copyAll() {
-    let text = `Personas localizadas — SismoVenezuela\n`;
+    let text = `Personas localizadas — SismoVenezuela\nhttps://sismovenezuela.vercel.app/localizados\n`;
     if (tab === "matched") {
-      text += `Cruce de datos contra listas hospitalarias\n`;
+      text += `\nCruce de datos contra listas hospitalarias\n`;
       groupedMatched.forEach(g => {
         text += `\n📋 ${g.title}${g.tweetUrl ? ` (${g.label} → ${g.tweetUrl})` : ""}\n`;
         g.people.forEach(p => { text += `  • ${p.name}${p.last_seen_location ? ` — ${p.last_seen_location}` : ""}\n`; });
       });
+    } else if (tab === "listas") {
+      text += `\nListas de pacientes hospitalarios\n`;
+      groupedByList.forEach(g => {
+        text += `\n📋 ${g.title} (${g.label} → ${g.tweetUrl})\n`;
+        g.people.forEach((p, i) => { text += `  ${i + 1}. ${p.name}${p.age ? `, ${p.age} años` : ""}${p.source_id ? " ✓" : ""}\n`; });
+      });
     } else {
-      text += `Todos los localizados (${all.length})\n`;
+      text += `\nTodos los localizados (${allTotal ?? all.length} total, mostrando ${all.length})\n`;
       all.forEach(p => { text += `  • ${p.name}${p.last_seen_location ? ` — ${p.last_seen_location}` : ""}\n`; });
     }
-    text += `\nhttps://sismovenezuela.vercel.app/localizados`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
@@ -326,6 +333,16 @@ export default function LocalizadosPage() {
                 <div className="flex flex-col gap-2">
                   {group.people.map((p, pi) => {
                     const isExpanded = expandedId === p.id;
+                    const src = p.external_source ?? "";
+                    const confidence: "high" | "medium" | null =
+                      src.includes(":high") ? "high" : src.includes(":medium") ? "medium" : null;
+                    const isVzb = p.source_id?.startsWith("vzb_");
+                    const platformLabel = isVzb ? "venezulatebusca.com" : "desaparecidosterremotovenezuela.com";
+                    const platformUrl = isVzb
+                      ? "https://venezulatebusca.com"
+                      : p.source_id
+                        ? `https://desaparecidosterremotovenezuela.com/?persona=${p.source_id}`
+                        : "https://desaparecidosterremotovenezuela.com";
                     return (
                       <div key={pi} className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
                         {/* Collapsed row */}
@@ -344,7 +361,12 @@ export default function LocalizadosPage() {
                               {p.last_seen_location && <span className="text-gray-400 text-xs">📍 {p.last_seen_location}</span>}
                             </div>
                           </div>
-                          <span className="text-gray-600 text-xs shrink-0">{isExpanded ? "▲" : "▼"}</span>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            {confidence === "high" && <span title="Alta confianza ≥85%" className="text-base leading-none">🥇</span>}
+                            {confidence === "medium" && <span title="Confianza media 72–85%" className="text-base leading-none">🥈</span>}
+                            {!confidence && <span title="Confianza no registrada" className="text-base leading-none">🏅</span>}
+                            <span className="text-gray-600 text-xs">{isExpanded ? "▲" : "▼"}</span>
+                          </div>
                         </button>
 
                         {/* Expanded — full card from our DB */}
@@ -361,12 +383,15 @@ export default function LocalizadosPage() {
                               <p className="text-amber-300 text-sm">☎ {p.contact_info}</p>
                             )}
                             <div className="border-t border-gray-800 pt-2 flex flex-col gap-1">
-                              <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-0.5">Fuentes</p>
-                              <span className="text-gray-500 text-xs">
-                                📋 Reportado como desaparecido en{" "}
-                                <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer"
-                                  className="text-violet-400 hover:underline">desaparecidosterremotovenezuela.com ↗</a>
-                              </span>
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-gray-600 text-[10px] uppercase tracking-wide">Fuentes</p>
+                                {confidence === "high" && <span className="text-[10px] text-green-500 font-semibold">🥇 Alta confianza (≥85%)</span>}
+                                {confidence === "medium" && <span className="text-[10px] text-yellow-500 font-semibold">🥈 Confianza media (72–85%)</span>}
+                              </div>
+                              <a href={platformUrl} target="_blank" rel="noopener noreferrer"
+                                className="text-gray-500 text-xs hover:text-violet-400 hover:underline">
+                                📋 Reportado como desaparecido en {platformLabel} ↗
+                              </a>
                               {p.source2_url
                                 ? <a href={p.source2_url} target="_blank" rel="noopener noreferrer"
                                     className="text-cyan-500 text-xs hover:text-cyan-300 hover:underline">
@@ -417,7 +442,7 @@ export default function LocalizadosPage() {
                           )}
                         </div>
                         {wasInDb && (
-                          <span className="text-cyan-400 text-[10px] font-semibold bg-cyan-900/40 border border-cyan-800 px-1.5 py-0.5 rounded shrink-0">✓ cruce</span>
+                          <span title="Persona verificada contra base de desaparecidos" className="text-[11px] shrink-0">🥇</span>
                         )}
                       </div>
                     );
@@ -505,12 +530,12 @@ export default function LocalizadosPage() {
                 {copied ? "✓ Lista copiada" : "Copiar lista completa"}
               </button>
             </div>
+            {tab === "matched" && (
             <p className="text-gray-600 text-xs text-center">
-              Error en el cruce →{" "}
-              <a href="https://github.com/nochinxx/venezuela-earthquake-map/issues" target="_blank" rel="noopener noreferrer" className="hover:text-gray-400">GitHub</a>
-              {" · "}
+              ¿Error en el cruce? →{" "}
               <a href="https://x.com/mariojllesca" target="_blank" rel="noopener noreferrer" className="hover:text-gray-400">@mariojllesca</a>
             </p>
+            )}
           </div>
         )}
       </div>

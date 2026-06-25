@@ -197,7 +197,7 @@ def sync():
             "lng": lng,
             "description": item.get("descripcion"),
             "contact_info": f"{item.get('reportado_por_nombre') or ''} {item.get('reportado_por_telefono') or ''}".strip() or None,
-            "source_id": None,
+            "source_id": f"vzb_{source2_id}",
             "photo_url": item.get("foto_url"),
             "status": "encontrado" if estado == "encontrado" else "sin-contacto",
             "external_source": "venezulatebusca",
