@@ -292,6 +292,10 @@ export default function Home() {
   const [missingStatus, setMissingStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [missingPersons, setMissingPersons] = useState<MissingPerson[]>([]);
   const missingMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const [showExternalMissing, setShowExternalMissing] = useState(false);
+  const [externalMissingTotal, setExternalMissingTotal] = useState<number | null>(null);
+  const [externalMissingLoading, setExternalMissingLoading] = useState(false);
+  const [selectedExternalPerson, setSelectedExternalPerson] = useState<Record<string, unknown> | null>(null);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [walkthroughStep, setWalkthroughStep] = useState(0);
   const [showEmergencyDir, setShowEmergencyDir] = useState(false);
@@ -515,6 +519,68 @@ export default function Home() {
     });
   }, [showRelief]);
 
+  // External missing persons (desaparecidosterremotovenezuela.com)
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !m.loaded()) return;
+
+    const SRC = "ext-missing";
+    const LAYER_CLUSTER = "ext-missing-cluster";
+    const LAYER_COUNT = "ext-missing-count";
+    const LAYER_POINT = "ext-missing-point";
+
+    if (!showExternalMissing) {
+      [LAYER_CLUSTER, LAYER_COUNT, LAYER_POINT].forEach(l => { if (m.getLayer(l)) m.removeLayer(l); });
+      if (m.getSource(SRC)) m.removeSource(SRC);
+      return;
+    }
+
+    setExternalMissingLoading(true);
+    fetch(`${API}/missing-persons/external?all=1`)
+      .then(r => r.json())
+      .then((geojson) => {
+        setExternalMissingTotal(geojson.meta?.total ?? null);
+        if (m.getSource(SRC)) {
+          (m.getSource(SRC) as mapboxgl.GeoJSONSource).setData(geojson);
+          return;
+        }
+        m.addSource(SRC, { type: "geojson", data: geojson, cluster: true, clusterMaxZoom: 13, clusterRadius: 35 });
+
+        m.addLayer({ id: LAYER_CLUSTER, type: "circle", source: SRC, filter: ["has", "point_count"],
+          paint: { "circle-color": "#7c3aed", "circle-radius": ["step", ["get", "point_count"], 14, 10, 20, 100, 26], "circle-opacity": 0.85, "circle-stroke-width": 1.5, "circle-stroke-color": "#fff" } });
+
+        m.addLayer({ id: LAYER_COUNT, type: "symbol", source: SRC, filter: ["has", "point_count"],
+          layout: { "text-field": "{point_count_abbreviated}", "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"], "text-size": 11 },
+          paint: { "text-color": "#fff" } });
+
+        m.addLayer({ id: LAYER_POINT, type: "circle", source: SRC, filter: ["!", ["has", "point_count"]],
+          paint: { "circle-color": ["case", ["==", ["get", "estado"], "localizado"], "#22c55e", "#7c3aed"], "circle-radius": 6, "circle-stroke-width": 1.5, "circle-stroke-color": "#fff", "circle-opacity": 0.9 } });
+
+        m.on("click", LAYER_CLUSTER, (e) => {
+          const features = m.queryRenderedFeatures(e.point, { layers: [LAYER_CLUSTER] });
+          const clusterId = features[0].properties?.cluster_id;
+          (m.getSource(SRC) as mapboxgl.GeoJSONSource).getClusterExpansionZoom(clusterId, (err, zoom) => {
+            if (err || !zoom) return;
+            const coords = (features[0].geometry as GeoJSON.Point).coordinates as [number, number];
+            m.easeTo({ center: coords, zoom });
+          });
+        });
+
+        m.on("click", LAYER_POINT, (e) => {
+          const props = e.features?.[0]?.properties;
+          if (props) setSelectedExternalPerson(props as Record<string, unknown>);
+        });
+
+        m.on("mouseenter", LAYER_CLUSTER, () => { m.getCanvas().style.cursor = "pointer"; });
+        m.on("mouseleave", LAYER_CLUSTER, () => { m.getCanvas().style.cursor = ""; });
+        m.on("mouseenter", LAYER_POINT, () => { m.getCanvas().style.cursor = "pointer"; });
+        m.on("mouseleave", LAYER_POINT, () => { m.getCanvas().style.cursor = ""; });
+      })
+      .catch(() => {})
+      .finally(() => setExternalMissingLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showExternalMissing]);
+
   // Auto-load source feed when a filter is active and no map location is selected
   useEffect(() => {
     if (!source || selected.length > 0) { setFeed([]); return; }
@@ -602,7 +668,14 @@ export default function Home() {
               </button>
               <button onClick={() => { setShowMissing(true); setMissingStatus("idle"); }}
                 className="px-2 py-0.5 rounded text-xs bg-orange-800 hover:bg-orange-700 text-white font-medium">
-                🧍 Desaparecidos
+                🧍 Reportar
+              </button>
+              <button
+                onClick={() => setShowExternalMissing(v => !v)}
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors flex items-center gap-1 ${showExternalMissing ? "bg-violet-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                title="Desaparecidos de desaparecidosterremotovenezuela.com"
+              >
+                🔍 {externalMissingLoading ? "..." : externalMissingTotal ? `${externalMissingTotal.toLocaleString()} desap.` : "Desaparecidos"}
               </button>
             </div>
             {/* Always visible: Reportar + guide */}
@@ -650,7 +723,11 @@ export default function Home() {
             </button>
             <button onClick={() => { setShowMissing(true); setMissingStatus("idle"); setShowMobileMenu(false); }}
               className="px-3 py-1.5 rounded-full text-xs bg-orange-800 text-white font-medium">
-              🧍 Desaparecidos
+              🧍 Reportar desap.
+            </button>
+            <button onClick={() => { setShowExternalMissing(v => !v); setShowMobileMenu(false); }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium ${showExternalMissing ? "bg-violet-700 text-white" : "bg-gray-800 text-gray-400"}`}>
+              🔍 {externalMissingTotal ? `${externalMissingTotal.toLocaleString()} desap.` : "Mapa desaparecidos"}
             </button>
             <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
               className="px-3 py-1.5 rounded-full text-xs bg-gray-800 text-gray-400">
@@ -1076,6 +1153,48 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* External missing person detail card */}
+      {selectedExternalPerson && (() => {
+        const ep = selectedExternalPerson as { nombre?: string; edad?: number; estado?: string; foto?: string; ubicacion?: string; descripcion?: string; contacto?: string; };
+        return (
+          <div className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) setSelectedExternalPerson(null); }}>
+            <div className="bg-gray-900 border border-violet-700 rounded-xl w-full max-w-sm p-5 flex flex-col gap-3">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded ${ep.estado === "localizado" ? "bg-green-800 text-green-300" : "bg-violet-900 text-violet-300"}`}>
+                    {ep.estado === "localizado" ? "✓ Localizado" : "Sin contacto"}
+                  </span>
+                  <h3 className="text-white font-bold text-base mt-1.5">{ep.nombre}</h3>
+                  {ep.edad ? <p className="text-gray-400 text-xs">{ep.edad} años</p> : null}
+                </div>
+                <button onClick={() => setSelectedExternalPerson(null)} className="text-gray-500 hover:text-white text-2xl leading-none ml-2">×</button>
+              </div>
+              {ep.foto ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={ep.foto} alt={ep.nombre ?? "foto"}
+                  className="w-24 h-24 rounded-lg object-cover border border-gray-700" />
+              ) : null}
+              <div className="flex flex-col gap-1.5 text-sm">
+                {ep.ubicacion ? (
+                  <p className="text-gray-300"><span className="text-gray-500 text-xs">Última ubicación · </span>{ep.ubicacion}</p>
+                ) : null}
+                {ep.descripcion ? (
+                  <p className="text-gray-400 text-xs leading-relaxed">{ep.descripcion}</p>
+                ) : null}
+                {ep.contacto ? (
+                  <p className="text-gray-300 text-xs"><span className="text-gray-500">Contacto · </span>{ep.contacto}</p>
+                ) : null}
+              </div>
+              <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer"
+                className="text-center text-xs text-violet-400 hover:text-violet-300 underline mt-1">
+                Ver en desaparecidosterremotovenezuela.com →
+              </a>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Walkthrough modal */}
       {showWalkthrough && (

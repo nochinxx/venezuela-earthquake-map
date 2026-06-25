@@ -42,4 +42,7 @@ if [ "$MINUTE" -lt 10 ] || { [ "$MINUTE" -gt 40 ] && [ "$MINUTE" -lt 50 ]; }; th
 
     echo "[relief-centers]" >> "$LOG"
     $CONDA scrapers/relief_centers.py >> "$LOG" 2>&1 || echo "[relief-centers] FAILED (exit $?)" >> "$LOG"
+
+    echo "[missing-persons]" >> "$LOG"
+    $CONDA scrapers/missing_persons_scraper.py >> "$LOG" 2>&1 || echo "[missing-persons] FAILED (exit $?)" >> "$LOG"
 fi
