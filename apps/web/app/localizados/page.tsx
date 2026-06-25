@@ -67,6 +67,7 @@ export default function LocalizadosPage() {
   const [showMethod, setShowMethod] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedList, setExpandedList] = useState<string | null>(null);
+  const [scrollToList, setScrollToList] = useState<string | null>(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitForm, setSubmitForm] = useState({ submitter: "", hospital: "", tweetUrl: "", names: "" });
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -96,9 +97,20 @@ export default function LocalizadosPage() {
       .catch(() => {});
   }, []);
 
-  // Load all localizados lazily when tab switches
+  // Scroll to list accordion when navigating from Cruces stats
   useEffect(() => {
-    if ((tab !== "all" && tab !== "listas") || all.length > 0) return;
+    if (!scrollToList || tab !== "listas") return;
+    const t = setTimeout(() => {
+      const el = document.querySelector(`[data-list-url="${CSS.escape(scrollToList)}"]`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      setScrollToList(null);
+    }, 50);
+    return () => clearTimeout(t);
+  }, [scrollToList, tab]);
+
+  // Load all localizados lazily — only needed for Todos tab
+  useEffect(() => {
+    if (tab !== "all" || all.length > 0) return;
     setLoadingAll(true);
     fetch(`/api/missing-persons?status=encontrado&limit=500&offset=0`)
       .then(r => r.json())
@@ -124,7 +136,7 @@ export default function LocalizadosPage() {
 
   const allHasMore = allTotal != null && all.length < allTotal;
   const people = tab === "matched" ? matched : all;
-  const loading = tab === "matched" ? loadingMatched : loadingAll;
+  const loading = tab === "matched" ? loadingMatched : tab === "all" ? loadingAll : false;
 
   const confirmedMatched = useMemo(() => matched.filter(p => p.source_id), [matched]);
 
@@ -181,9 +193,10 @@ export default function LocalizadosPage() {
     return all.filter(p => p.name.toLowerCase().includes(ql) || (p.last_seen_location ?? "").toLowerCase().includes(ql));
   }, [all, ql]);
 
+  // Built from `matched` (loaded on mount) so Listas tab works without loading all localizados
   const groupedByList = useMemo(() => {
     const map = new Map<string, { label: string; title: string; tweetUrl: string; people: Person[] }>();
-    for (const p of all) {
+    for (const p of matched) {
       if (!p.source2_url) continue;
       if (!p.source2_url.includes("x.com") && !p.source2_url.includes("twitter.com")) continue;
       if (!map.has(p.source2_url)) {
@@ -197,7 +210,7 @@ export default function LocalizadosPage() {
       map.get(p.source2_url)!.people.push(p);
     }
     return Array.from(map.values()).sort((a, b) => b.people.length - a.people.length);
-  }, [all]);
+  }, [matched]);
 
   const filteredLists = useMemo(() => {
     if (!ql) return groupedByList;
@@ -421,7 +434,11 @@ export default function LocalizadosPage() {
                     return (
                       <div key={i} className="flex items-center justify-between gap-3 py-2">
                         <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                          <p className="text-gray-300 text-xs font-medium leading-tight truncate">{g.title}</p>
+                          <button
+                            onClick={() => { setTab("listas"); setExpandedList(g.tweetUrl ?? ""); setScrollToList(g.tweetUrl ?? ""); }}
+                            className="text-gray-300 text-xs font-medium leading-tight truncate hover:text-amber-300 text-left">
+                            {g.title} →
+                          </button>
                           {g.tweetUrl && (
                             <a href={g.tweetUrl} target="_blank" rel="noopener noreferrer"
                               className="text-gray-600 text-[10px] hover:text-amber-500 hover:underline">{g.label} ↗</a>
@@ -554,7 +571,7 @@ export default function LocalizadosPage() {
               const isOpen = expandedList === group.tweetUrl;
               const matched_count = group.people.filter(p => !!p.source_id).length;
               return (
-                <div key={gi} className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+                <div key={gi} data-list-url={group.tweetUrl} className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
                   {/* Accordion header */}
                   <button
                     className="w-full px-4 py-3 flex items-start gap-3 text-left hover:bg-gray-800/40 transition-colors"
@@ -602,14 +619,6 @@ export default function LocalizadosPage() {
                 </div>
               );
             })}
-            {allHasMore && !ql && (
-              <button
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="w-full py-3 rounded-lg border border-amber-800 text-amber-400 text-sm font-semibold hover:bg-amber-900/30 transition-colors disabled:opacity-50">
-                {loadingMore ? "Cargando..." : `Ver más listas · ${allTotal! - all.length} registros restantes`}
-              </button>
-            )}
           </>
         )}
 
