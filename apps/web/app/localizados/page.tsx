@@ -49,6 +49,7 @@ export default function LocalizadosPage() {
   const [loadingAll, setLoadingAll] = useState(false);
   const [q, setQ] = useState("");
   const [copied, setCopied] = useState(false);
+  const [showMethod, setShowMethod] = useState(false);
 
   // Load matched (our cross-references) on mount
   useEffect(() => {
@@ -164,13 +165,57 @@ export default function LocalizadosPage() {
 
           {/* Tab description */}
           {tab === "matched" ? (
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-2">
               <p className="text-gray-400 text-xs leading-relaxed">
-                Personas confirmadas mediante <strong className="text-cyan-400">cruce manual de listas hospitalarias</strong> por SismoVenezuela, comparadas contra los registros de{" "}
+                Personas confirmadas mediante <strong className="text-cyan-400">cruce de listas hospitalarias</strong> por SismoVenezuela, comparadas contra los registros de{" "}
                 <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline">desaparecidosterremotovenezuela.com</a>
                 {" y "}
                 <a href="https://venezulatebusca.com" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline">venezulatebusca.com</a>.
               </p>
+
+              {/* Methodology toggle */}
+              <button
+                onClick={() => setShowMethod(v => !v)}
+                className="flex items-center gap-1.5 text-gray-500 hover:text-gray-300 text-[11px] transition-colors w-fit">
+                <span className={`transition-transform ${showMethod ? "rotate-90" : ""}`}>▶</span>
+                {showMethod ? "Ocultar metodología" : "¿Cómo funciona el cruce? · Margen de error"}
+              </button>
+
+              {showMethod && (
+                <div className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 flex flex-col gap-2.5 text-xs">
+                  <div>
+                    <p className="text-gray-200 font-semibold mb-1">Metodología</p>
+                    <p className="text-gray-400 leading-relaxed">
+                      Tomamos listas de pacientes publicadas en hospitales (vía X/Twitter) y las comparamos automáticamente contra la base de datos de desaparecidos. El algoritmo calcula un <strong className="text-cyan-400">score de similitud de nombre</strong> usando coincidencia de caracteres (<em>SequenceMatcher</em>) combinado con solapamiento de palabras clave. Solo se registra el cruce si el score supera el <strong className="text-cyan-400">72 %</strong> de similitud.
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-200 font-semibold mb-1">Confianza por nivel</p>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-400 shrink-0"></span>
+                        <span className="text-gray-400"><strong className="text-gray-300">≥ 85 %</strong> — alta confianza: nombre prácticamente idéntico, variaciones menores de ortografía</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0"></span>
+                        <span className="text-gray-400"><strong className="text-gray-300">72 – 84 %</strong> — confianza media: posible variación de apellido, nombre abreviado, o error tipográfico en la fuente</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-gray-200 font-semibold mb-1">Limitaciones</p>
+                    <ul className="text-gray-400 leading-relaxed list-disc list-inside space-y-0.5">
+                      <li>Puede haber <strong className="text-yellow-400">falsos positivos</strong> si dos personas comparten nombre similar</li>
+                      <li>Puede haber <strong className="text-yellow-400">falsos negativos</strong> si el nombre en la lista hospitalaria difiere mucho del registrado</li>
+                      <li>Las listas hospitalarias pueden contener errores tipográficos en el nombre original</li>
+                    </ul>
+                  </div>
+                  <p className="text-gray-600 text-[10px] border-t border-gray-800 pt-2">
+                    ⚠️ Todos los cruces son aproximados. <strong className="text-gray-500">Verificar siempre con la fuente original</strong> (ver enlace al tweet) antes de confirmar y actualizar registros.
+                  </p>
+                </div>
+              )}
+
               <p className="text-gray-600 text-[10px]">⚠️ Los cruces son aproximados — siempre verificar con la fuente original antes de confirmar.</p>
             </div>
           ) : (
