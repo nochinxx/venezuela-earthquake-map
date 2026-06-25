@@ -45,7 +45,7 @@ def search_youtube(query: str, max_results: int = 10) -> list[dict]:
     with tempfile.TemporaryDirectory() as tmp:
         result = subprocess.run(
             [
-                "/opt/homebrew/bin/yt-dlp",
+                "/opt/homebrew/Caskroom/miniforge/base/envs/agent/bin/yt-dlp",
                 f"ytsearch{max_results}:{query}",
                 "--dump-json", "--flat-playlist",
                 "--no-download",
