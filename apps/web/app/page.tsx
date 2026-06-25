@@ -139,6 +139,13 @@ const EMERGENCY_DIR = [
     ],
   },
   {
+    category: "🚗 Transporte de Emergencia",
+    entries: [
+      { name: "Yummy — Viajes GRATIS a hospitales y clínicas", location: "Caracas y ciudades afectadas", phone: "App Yummy · @vicentezavarce · 24–25 Jun" },
+      { name: "Yummy — Cero surge pricing", location: "Todo el día", phone: "0% comisión para conductores" },
+    ],
+  },
+  {
     category: "⛑️ Rescate",
     entries: [
       { name: "Cuerpo de Emergencias Rescate y Transmisiones", location: "", phone: "(0212) 545.47.47" },
@@ -840,6 +847,20 @@ export default function Home() {
           </div>
           </>
         )}
+
+        {/* Yummy emergency service card — time-sensitive 24-25 Jun */}
+        <div className="absolute top-3 left-3 z-10 max-w-[220px]">
+          <a href="https://www.instagram.com/p/DZ_mMvojQMH/" target="_blank" rel="noopener noreferrer"
+            className="flex flex-col gap-1 bg-green-950/95 border border-green-700 rounded-lg px-3 py-2.5 hover:border-green-500 transition-colors">
+            <div className="flex items-center gap-1.5">
+              <span className="text-green-400 font-bold text-xs uppercase tracking-wide">🚗 Yummy</span>
+              <span className="text-green-600 text-xs">· 24–25 Jun</span>
+            </div>
+            <p className="text-white text-xs font-semibold leading-tight">Viajes gratis a hospitales y clínicas</p>
+            <p className="text-green-300 text-xs leading-tight">Cero surge pricing · 0% comisión conductores</p>
+            <p className="text-green-600 text-xs">@vicentezavarce →</p>
+          </a>
+        </div>
 
         <div className="absolute bottom-4 left-3 flex flex-col gap-2 z-10 max-w-[180px] md:max-w-none">
           {/* Emergency box — collapsed pill on mobile, full on desktop */}
