@@ -37,6 +37,19 @@ interface Report {
   parent_url: string | null;
 }
 
+interface ReliefCenter {
+  id: string;
+  name: string;
+  address: string;
+  state: string;
+  lat: number;
+  lng: number;
+  source_name: string;
+  source_url: string;
+  accepted_items: string;
+  scraped_at: string;
+}
+
 const DAMAGE_COLOR: Record<number, string> = {
   1: "#fef9c3",
   2: "#fde68a",
@@ -66,6 +79,10 @@ export default function Home() {
   const [submitForm, setSubmitForm] = useState({ url: "", location: "", description: "", damage: "3" });
   const [submitStatus, setSubmitStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
+  const [reliefCenters, setReliefCenters] = useState<ReliefCenter[]>([]);
+  const [showRelief, setShowRelief] = useState(true);
+  const [selectedRelief, setSelectedRelief] = useState<ReliefCenter | null>(null);
+  const reliefMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const clickedCoords = useRef<{ lat: number; lng: number } | null>(null);
 
   function sortReports(rows: Report[], order: SortOrder) {
@@ -84,10 +101,31 @@ export default function Home() {
     setSelected(rows.map(r => ({ ...r, media_urls: Array.isArray(r.media_urls) ? r.media_urls : [] })));
   }
 
+  function renderReliefMarkers(centers: ReliefCenter[]) {
+    reliefMarkersRef.current.forEach(m => m.remove());
+    reliefMarkersRef.current = [];
+    if (!map.current) return;
+    centers.forEach((center) => {
+      const el = document.createElement("div");
+      el.style.cssText = "width:28px;height:28px;background:#22c55e;border:2px solid #fff;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.5)";
+      el.innerHTML = "📦";
+      el.title = center.name;
+      el.onclick = () => setSelectedRelief(center);
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([center.lng, center.lat])
+        .addTo(map.current!);
+      reliefMarkersRef.current.push(marker);
+    });
+  }
+
   function loadData() {
     const p = new URLSearchParams();
     if (source) p.set("source", source);
     fetch(`${API}/casualties`).then((r) => r.json()).then((c) => { if (c) setCasualties(c); }).catch(() => {});
+    fetch(`${API}/relief-centers`).then((r) => r.json()).then((centers: ReliefCenter[]) => {
+      setReliefCenters(centers);
+      renderReliefMarkers(centers);
+    }).catch(() => {});
     Promise.all([
       fetch(`${API}/reports/geojson?${p}`).then((r) => r.json()),
       fetch(`${API}/reports/stats`).then((r) => r.json()),
@@ -224,6 +262,13 @@ export default function Home() {
     }
   }, [source]);
 
+  useEffect(() => {
+    reliefMarkersRef.current.forEach(m => {
+      const el = m.getElement();
+      el.style.display = showRelief ? "flex" : "none";
+    });
+  }, [showRelief]);
+
   const sortedSelected = sortReports(selected, panelSort);
 
   return (
@@ -282,6 +327,13 @@ export default function Home() {
           <button onClick={() => setSort(s => s === "newest" ? "oldest" : "newest")}
             className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 hover:bg-gray-700">
             {sort === "newest" ? "↓ Más recientes" : "↑ Más antiguos"}
+          </button>
+
+          <button onClick={() => setShowRelief(v => !v)}
+            className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+              showRelief ? "bg-green-700 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+            }`}>
+            📦 Acopios
           </button>
 
           <button onClick={() => { setShowSubmit(true); setSubmitStatus("idle"); }}
@@ -412,8 +464,37 @@ export default function Home() {
               <span className="text-gray-400">{DAMAGE_LABEL[Number(lvl)]}</span>
             </div>
           ))}
+          <div className="border-t border-gray-700 mt-1 pt-1.5 flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-green-500" />
+            <span className="text-gray-400">Centro de acopio</span>
+          </div>
         </div>
       </div>
+
+      {/* Relief center detail panel */}
+      {selectedRelief && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-green-700 rounded-xl shadow-xl w-full max-w-sm p-4 flex flex-col gap-2">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-green-900 text-green-300 uppercase">Centro de acopio</span>
+              <p className="font-bold text-white mt-1.5">{selectedRelief.name}</p>
+            </div>
+            <button onClick={() => setSelectedRelief(null)} className="text-gray-500 hover:text-white text-xl leading-none ml-2">×</button>
+          </div>
+          <p className="text-gray-300 text-sm">{selectedRelief.address}</p>
+          {selectedRelief.state && <p className="text-gray-500 text-xs">{selectedRelief.state}</p>}
+          {selectedRelief.accepted_items && (
+            <p className="text-green-400 text-xs"><span className="text-gray-500">Acepta: </span>{selectedRelief.accepted_items}</p>
+          )}
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-gray-600 text-xs">{selectedRelief.source_name}</span>
+            {selectedRelief.source_url && (
+              <a href={selectedRelief.source_url} target="_blank" rel="noopener noreferrer"
+                className="text-xs text-green-400 hover:text-green-300">Ver fuente →</a>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Submit report modal */}
       {showSubmit && (

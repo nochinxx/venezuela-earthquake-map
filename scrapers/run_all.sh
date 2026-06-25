@@ -39,4 +39,7 @@ if [ "$MINUTE" -lt 10 ] || { [ "$MINUTE" -gt 40 ] && [ "$MINUTE" -lt 50 ]; }; th
 
     echo "[ig-comments]" >> "$LOG"
     $CONDA scrapers/instagram_comments.py >> "$LOG" 2>&1 || echo "[ig-comments] FAILED (exit $?)" >> "$LOG"
+
+    echo "[relief-centers]" >> "$LOG"
+    $CONDA scrapers/relief_centers.py >> "$LOG" 2>&1 || echo "[relief-centers] FAILED (exit $?)" >> "$LOG"
 fi
