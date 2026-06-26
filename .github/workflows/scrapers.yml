@@ -1,0 +1,39 @@
+name: Scrapers
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+  workflow_dispatch:          # manual trigger from GitHub UI
+
+jobs:
+  run-scrapers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install requests httpx python-dotenv supabase
+
+      - name: missing-persons
+        run: python scrapers/missing_persons_scraper.py
+
+      - name: venezulatebusca
+        run: python scrapers/venezulatebusca_scraper.py
+
+      - name: building-damage
+        run: python scrapers/building_damage_scraper.py
+
+      - name: localizados-vzla
+        run: python scrapers/localizados_vzla_scraper.py
+        continue-on-error: true
