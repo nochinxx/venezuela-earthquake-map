@@ -74,6 +74,7 @@ export default function LocalizadosPage() {
   const [submitDone, setSubmitDone] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [sinContactoTotal, setSinContactoTotal] = useState<number | null>(null);
+  const [localizadosVzlaTotal, setLocalizadosVzlaTotal] = useState<number | null>(null);
 
   // Load matched cross-references + background counts on mount
   useEffect(() => {
@@ -94,6 +95,11 @@ export default function LocalizadosPage() {
     fetch("/api/missing-persons?count=1&status=encontrado")
       .then(r => r.json())
       .then((res: { total: number }) => setAllTotal(res.total ?? null))
+      .catch(() => {});
+
+    fetch("/api/missing-persons?count=1&extsource=localizadosvenezuela.com")
+      .then(r => r.json())
+      .then((res: { total: number }) => setLocalizadosVzlaTotal(res.total ?? null))
       .catch(() => {});
   }, []);
 
@@ -566,6 +572,22 @@ export default function LocalizadosPage() {
               <p className="text-gray-500 text-xs">
                 {filteredLists.length} lista{filteredLists.length !== 1 ? "s" : ""} · {filteredLists.reduce((s, g) => s + g.people.length, 0)} personas
               </p>
+            )}
+            {/* localizadosvenezuela.com source card */}
+            {localizadosVzlaTotal != null && localizadosVzlaTotal > 0 && (
+              <div className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <p className="text-white font-semibold text-sm">Base de datos — localizadosvenezuela.com</p>
+                  <a href="https://localizadosvenezuela.com" target="_blank" rel="noopener noreferrer"
+                    className="text-amber-500 text-xs hover:underline w-fit">
+                    localizadosvenezuela.com ↗
+                  </a>
+                </div>
+                <div className="flex flex-col items-end gap-0.5 shrink-0">
+                  <span className="text-white text-xs font-bold">{localizadosVzlaTotal.toLocaleString()} personas</span>
+                  <span className="text-gray-500 text-[10px]">múltiples hospitales</span>
+                </div>
+              </div>
             )}
             {filteredLists.map((group, gi) => {
               const isOpen = expandedList === group.tweetUrl;

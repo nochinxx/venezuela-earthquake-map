@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   const countOnly = searchParams.get("count") === "1";
 
   const matched = searchParams.get("matched") === "1";
+  const extsource = searchParams.get("extsource") || "";
 
   let base = supabase.from("missing_persons").select(
     countOnly ? "id" : "id,name,age,last_seen_location,lat,lng,description,contact_info,submitted_at,photo_url,status,external_source,source2_url,source_id",
@@ -18,6 +19,8 @@ export async function GET(req: NextRequest) {
 
   if (matched) {
     base = base.ilike("external_source", "%SismoVenezuela%");
+  } else if (extsource) {
+    base = base.ilike("external_source", `${extsource}%`);
   } else {
     if (status === "sin-contacto") base = base.or("status.eq.sin-contacto,status.is.null");
     else if (status === "encontrado") base = base.or("status.eq.encontrado,status.eq.localizado");
