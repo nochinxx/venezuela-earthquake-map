@@ -860,7 +860,6 @@ export default function Home() {
               <span className="text-white font-bold text-sm">{casualties?.deaths ?? "—"} <span className="text-red-300 font-normal text-xs">muertos</span></span>
               {casualties?.injured != null && <span className="text-white font-bold text-sm">{casualties.injured}+ <span className="text-red-300 font-normal text-xs">heridos</span></span>}
               {casualties?.missing != null && <span className="text-white font-bold text-sm">{casualties.missing} <span className="text-red-300 font-normal text-xs">desaparecidos</span></span>}
-              <span className="text-red-400 text-xs hidden sm:inline italic">⚠ Cifra parcial · excluye La Guaira</span>
               <span className="text-red-500 text-xs ml-auto italic hidden sm:inline">
                 {casualties?.source_url ? (
                   <a href={casualties.source_url} target="_blank" rel="noopener noreferrer" className="hover:text-red-300 underline">
