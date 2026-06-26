@@ -59,7 +59,7 @@ sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"
 
 ```
 apps/web/          Next.js 15 (App Router) + Mapbox GL JS + Tailwind — deployed to Vercel
-apps/api/          FastAPI + uvicorn — deployed to Railway (reports ingestion only)
+apps/api/          FastAPI + uvicorn — NOT deployed (Railway free tier not available); runs locally only if needed
 scrapers/          Python scripts — run on Mario's machine via conda env "agent"
 infra/schema.sql   Supabase schema (already applied to prod)
 ```
@@ -431,7 +431,7 @@ When using the Edit tool, always read the file first to get exact current conten
 ## Deployment
 
 - **Frontend:** Vercel (auto-deploys from `main` branch). URL: sismovenezuela.com
-- **API:** Railway (FastAPI, handles report ingestion only — not missing persons)
+- **API:** FastAPI — NOT deployed to Railway (free tier not available). Not in use for production.
 - **Scrapers:** Mario's local machine, launchd cron every 10 min via `scrapers/run_all.sh` (job: `com.marios-agent.earthquake-scraper`)
 - **DB:** Supabase (free tier, 500MB, PostGIS enabled)
 
