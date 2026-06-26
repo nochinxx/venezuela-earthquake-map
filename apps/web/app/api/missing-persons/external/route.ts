@@ -152,7 +152,7 @@ export async function GET() {
       type: "FeatureCollection",
       features,
       meta: { total: all.length, geolocated: features.length },
-    });
+    }, { headers: { "Cache-Control": "s-maxage=60, stale-while-revalidate=300" } });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

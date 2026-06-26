@@ -27,10 +27,12 @@ export async function GET(req: NextRequest) {
   }
   if (q) base = base.ilike("name", `%${q}%`);
 
+  const CACHE = { headers: { "Cache-Control": "s-maxage=60, stale-while-revalidate=300" } };
+
   if (countOnly) {
     const { count, error } = await base.limit(1);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ total: count ?? 0 });
+    return NextResponse.json({ total: count ?? 0 }, CACHE);
   }
 
   const { data, count, error } = await base
@@ -38,7 +40,7 @@ export async function GET(req: NextRequest) {
     .range(offset, offset + limit - 1);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data: data ?? [], total: count ?? 0 });
+  return NextResponse.json({ data: data ?? [], total: count ?? 0 }, CACHE);
 }
 
 export async function POST(req: NextRequest) {

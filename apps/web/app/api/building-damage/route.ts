@@ -31,5 +31,5 @@ export async function GET() {
     })),
   };
 
-  return NextResponse.json(geojson);
+  return NextResponse.json(geojson, { headers: { "Cache-Control": "s-maxage=120, stale-while-revalidate=600" } });
 }
