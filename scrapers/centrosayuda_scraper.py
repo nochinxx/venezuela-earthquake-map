@@ -85,12 +85,10 @@ CITY_STATE = {
     "tucupita":         "Delta Amacuro",
     "san fernando":     "Apure",
     "apure":            "Apure",
-    "ciudad bolívar":   "Bolívar",
     "calabozo":         "Guárico",
     "guárico":          "Guárico",
     "guarico":          "Guárico",
     "valera":           "Trujillo",
-    "trujillo":         "Trujillo",
     "trujillo":         "Trujillo",
 }
 
@@ -164,6 +162,7 @@ def scrape() -> None:
                 "source_name": SOURCE_NAME,
                 "source_url": SOURCE_URL,
                 "accepted_items": accepted_items,
+                "active": True,
             }).execute()
             print(f"  + {name} ({city_raw})")
             inserted += 1
