@@ -270,6 +270,10 @@ export default function LocalizadosPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
+      {/* Maintenance banner */}
+      <div className="bg-yellow-900 border-b border-yellow-700 px-4 py-2.5 text-center text-sm text-yellow-200">
+        <span className="font-semibold">Estamos actualizando los datos.</span> Las listas y cruces estarán disponibles en unos minutos. Disculpe las molestias.
+      </div>
       {/* Sticky header */}
       <div className="bg-gray-900 border-b border-gray-800 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">

@@ -165,7 +165,7 @@ def main():
             "name": name,
             "last_seen_location": lugar,
             "status": "localizado",
-            "external_source": f"SismoVenezuela via {source_label}",
+            "external_source": f"localizadosvenezuela.com via {lugar}",
             "source2_url": source_url,
         }).execute()
         inserted += 1
