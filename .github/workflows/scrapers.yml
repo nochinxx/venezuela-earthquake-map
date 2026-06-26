@@ -25,14 +25,16 @@ jobs:
       - name: Install dependencies
         run: pip install requests httpx python-dotenv supabase
 
-      - name: missing-persons
-        run: python scrapers/missing_persons_scraper.py
+      # missing_persons_scraper.py is excluded — desaparecidos-terremoto-api.theempire.tech
+      # blocks GitHub/cloud IP ranges (ENETUNREACH). Must run from Mac Mini only.
 
       - name: venezulatebusca
         run: python scrapers/venezulatebusca_scraper.py
+        continue-on-error: true
 
       - name: building-damage
         run: python scrapers/building_damage_scraper.py
+        continue-on-error: true
 
       - name: localizados-vzla
         run: python scrapers/localizados_vzla_scraper.py
