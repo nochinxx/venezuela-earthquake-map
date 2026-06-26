@@ -153,13 +153,7 @@ const EMERGENCY_DIR = [
       { name: "Policía Municipal del Hatillo", location: "", phone: "(0212) 961.16.82" },
     ],
   },
-  {
-    category: "🚗 Transporte de Emergencia",
-    entries: [
-      { name: "Yummy — Viajes GRATIS a hospitales y clínicas", location: "Caracas y ciudades afectadas", phone: "App Yummy · @vicentezavarce · 24–25 Jun" },
-      { name: "Yummy — Cero surge pricing", location: "Todo el día", phone: "0% comisión para conductores" },
-    ],
-  },
+
   {
     category: "⛑️ Rescate",
     entries: [
@@ -338,7 +332,7 @@ export default function Home() {
 
   const [legendOpen, setLegendOpen] = useState(false);
   const [bannerOpen, setBannerOpen] = useState(true);
-  const [showYummyCard, setShowYummyCard] = useState(true);
+
   const [showReports, setShowReports] = useState(true);
   const [showBuildings, setShowBuildings] = useState(true);
   const [showNeeds, setShowNeeds] = useState(true);
@@ -878,18 +872,7 @@ export default function Home() {
           </>
         )}
       </div>
-      {/* Yummy emergency strip — remove once offer expires */}
-      {showYummyCard && (
-        <div className="shrink-0 flex items-center gap-2 px-3 py-1 bg-green-950 border-b border-green-800 text-xs">
-          <a href="https://www.instagram.com/p/DZ_40JluPsA/" target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 flex-1 min-w-0 hover:opacity-80 transition-opacity">
-            <span className="text-green-400 font-bold shrink-0">🚗 Yummy</span>
-            <span className="text-green-200 truncate">Viajes gratis a hospitales · Cero surge pricing · 0% comisión conductores</span>
-            <span className="text-green-600 shrink-0 hidden sm:inline">@vicentezavarce →</span>
-          </a>
-          <button onClick={() => setShowYummyCard(false)} className="text-green-700 hover:text-green-400 shrink-0 leading-none text-base" aria-label="Cerrar">×</button>
-        </div>
-      )}
+
       {/* Header */}
       <div className="bg-gray-900 border-b border-gray-800 shrink-0">
         {/* Main header row */}
@@ -1713,7 +1696,7 @@ export default function Home() {
             </a>
           </div>
         )}
-        </div>{/* end stats+yummy column */}
+        </div>{/* end stats column */}
 
         <div className="absolute bottom-4 left-3 flex flex-col gap-2 z-10 max-w-[180px] md:max-w-none">
           {/* Emergency box — collapsed pill on mobile, full on desktop */}
