@@ -335,6 +335,7 @@ When someone sends a photo/tweet with a hospital patient list:
 | Hospital Pérez Carreño | Pediatría 06/26 | @elhabito/2070174496913236064 | 15 | 5 | 10 |
 | Hospital Pérez Carreño | Adult ward | @uiteraardpaard/2070143455385317665 | 86 | 46 | 40 |
 | Multi-hospital consolidado (Pérez Carreño + Luciani + HUC + Baquero + Vargas) | 25 jun 2026 | @mariangelli (PDF) | 299 | 68 | 231 |
+| localizadosvenezuela.com (all hospitals) | Full API sync | https://localizadosvenezuela.com/api | 1997 | 2 (cédula only) | 1995 |
 
 ---
 
