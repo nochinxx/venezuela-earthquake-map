@@ -26,9 +26,15 @@ Thresholds:
 """
 
 import os, sys, argparse
-from difflib import SequenceMatcher
 from dotenv import load_dotenv
 from supabase import create_client
+
+try:
+    from rapidfuzz import fuzz as _rfuzz, process as _rprocess
+    _RAPIDFUZZ = True
+except ImportError:
+    from difflib import SequenceMatcher
+    _RAPIDFUZZ = False
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
@@ -36,13 +42,46 @@ sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"
 HIGH = 0.85
 LOW  = 0.72
 
+# Thresholds as 0–100 for rapidfuzz
+_HIGH_RF = HIGH * 100
+_LOW_RF  = LOW  * 100
+
 
 def similarity(a: str, b: str) -> float:
     a, b = a.lower().strip(), b.lower().strip()
-    seq = SequenceMatcher(None, a, b).ratio()
+    if _RAPIDFUZZ:
+        seq = _rfuzz.WRatio(a, b) / 100.0
+    else:
+        from difflib import SequenceMatcher
+        seq = SequenceMatcher(None, a, b).ratio()
     wa, wb = set(a.split()), set(b.split())
     overlap = len(wa & wb) / max(len(wa | wb), 1)
     return max(seq, overlap)
+
+
+def best_match(name: str, missing: list[dict]) -> tuple[float, dict | None]:
+    """Return (score, record) for the best match. Uses rapidfuzz batch scan when available."""
+    if not missing:
+        return 0.0, None
+    if _RAPIDFUZZ:
+        names = [r["name"] for r in missing]
+        result = _rprocess.extractOne(
+            name.lower().strip(), names,
+            scorer=_rfuzz.WRatio,
+            score_cutoff=_LOW_RF * 0.9,  # slightly below LOW to let token-overlap catch edge cases
+        )
+        if result is None:
+            return 0.0, None
+        idx = result[2]
+        score = similarity(name, missing[idx]["name"])
+        return score, missing[idx]
+    else:
+        best_score, best_rec = 0.0, None
+        for rec in missing:
+            s = similarity(name, rec["name"])
+            if s > best_score:
+                best_score, best_rec = s, rec
+        return best_score, best_rec
 
 
 def load_missing() -> tuple[list[dict], dict[str, dict]]:
@@ -111,13 +150,7 @@ def run(names: list[str], hospital: str, tweet_url: str | None, source_label: st
             continue
 
         # 2. Fuzzy name match
-        best_score = 0.0
-        best_rec = None
-        for rec in missing:
-            s = similarity(name, rec["name"])
-            if s > best_score:
-                best_score = s
-                best_rec = rec
+        best_score, best_rec = best_match(name, missing)
 
         if best_score >= HIGH:
             results["high"].append((name, best_score, best_rec))

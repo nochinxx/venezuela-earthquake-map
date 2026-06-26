@@ -21,7 +21,7 @@ load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 # Import shared logic from match_hospital_list
 sys.path.insert(0, str(Path(__file__).parent))
-from match_hospital_list import load_missing, similarity, HIGH, LOW
+
 from supabase import create_client
 
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
@@ -57,6 +57,30 @@ def fetch_all_records() -> list[dict]:
     return records
 
 
+def load_cedula_index() -> dict[str, dict]:
+    """Fetch only records that have a cédula — much faster than loading everything."""
+    index = {}
+    offset = 0
+    while True:
+        rows = (
+            sb.table("missing_persons")
+            .select("id,name,cedula")
+            .not_.is_("cedula", "null")
+            .or_("is_duplicate.eq.false,is_duplicate.is.null")
+            .range(offset, offset + 999)
+            .execute()
+        )
+        if not rows.data:
+            break
+        for r in rows.data:
+            if r.get("cedula"):
+                index[r["cedula"].strip()] = r
+        if len(rows.data) < 1000:
+            break
+        offset += 1000
+    return index
+
+
 def load_state() -> set[str]:
     if STATE_FILE.exists():
         return set(json.loads(STATE_FILE.read_text()))
@@ -89,11 +113,12 @@ def main():
         print("[localizados-vzla] Nothing new. Done.")
         return
 
-    print("[localizados-vzla] Loading missing_persons DB...")
-    missing, cedula_index = load_missing()
-    print(f"  {len(missing)} records, {len(cedula_index)} with cédula")
+    print("[localizados-vzla] Loading cédula index...")
+    cedula_index = load_cedula_index()
+    print(f"  {len(cedula_index)} records with cédula in DB")
 
-    results = {"cedula": [], "high": [], "medium": [], "no_match": []}
+    cedula_matches = []
+    new_inserts = []
 
     for rec in new_records:
         name = rec["nombreCompleto"].strip()
@@ -104,37 +129,20 @@ def main():
         source_label = f"{lugar} via localizadosvenezuela.com"
 
         if cedula and cedula in cedula_index:
-            results["cedula"].append((name, cedula, cedula_index[cedula], source_url, source_label, lugar))
-            continue
-
-        best_score, best_rec = 0.0, None
-        for m in missing:
-            s = similarity(name, m["name"])
-            if s > best_score:
-                best_score, best_rec = s, m
-
-        if best_score >= HIGH:
-            results["high"].append((name, best_score, best_rec, source_url, source_label, lugar))
-        elif best_score >= LOW:
-            results["medium"].append((name, best_score, best_rec, source_url, source_label, lugar))
+            cedula_matches.append((name, cedula, cedula_index[cedula], source_url, source_label, lugar))
         else:
-            results["no_match"].append((name, source_url, source_label, lugar))
+            new_inserts.append((name, source_url, source_label, lugar))
 
     print(f"\n=== Results for {len(new_records)} new localizados ===")
-    print(f"  🟢 Cédula exacta:               {len(results['cedula'])}")
-    print(f"  🟡 High confidence (≥{HIGH}):    {len(results['high'])}")
-    print(f"  🟠 Medium confidence ({LOW}–{HIGH}): {len(results['medium'])}")
-    print(f"  ⚫️  No match (new insert):        {len(results['no_match'])}")
+    print(f"  🟢 Cédula exacta (updates existing):  {len(cedula_matches)}")
+    print(f"  ⚫️  New insert  (name-only, no update): {len(new_inserts)}")
+    print("\n  Note: name-only matches are inserted as new records.")
+    print("  Cédula is the only signal safe enough to update an existing record.")
 
-    if results["medium"]:
-        print("\n⚠️  Medium confidence samples (first 10):")
-        for name, score, rec, *_ in results["medium"][:10]:
-            print(f"  [{score:.2f}] '{name}' ↔ '{rec['name']}'")
-
-    if args.high_only and results["medium"]:
-        print(f"\n[high-only] Demoting {len(results['medium'])} medium matches → new inserts")
-        results["no_match"].extend((n, su, sl, lu) for n, _, _, su, sl, lu in results["medium"])
-        results["medium"] = []
+    if cedula_matches:
+        print("\n🟢 Cédula matches:")
+        for name, cedula, rec, *_ in cedula_matches:
+            print(f"  [{cedula}] '{name}' ↔ '{rec['name']}' (id={rec['id']})")
 
     if args.dry_run:
         print("\n[dry-run] No changes written.")
@@ -143,24 +151,16 @@ def main():
     updated = 0
     inserted = 0
 
-    for name, cedula, rec, source_url, source_label, _ in results["cedula"]:
+    for name, cedula, rec, source_url, source_label, _ in cedula_matches:
         sb.table("missing_persons").update({
             "status": "localizado",
             "external_source": f"SismoVenezuela:cedula via {source_label}",
             "source2_url": source_url,
         }).eq("id", rec["id"]).execute()
         updated += 1
+        print(f"  🟢 updated: {rec['name']} (cédula={cedula})")
 
-    for name, score, rec, source_url, source_label, _ in results["high"] + results["medium"]:
-        confidence = "high" if score >= HIGH else "medium"
-        sb.table("missing_persons").update({
-            "status": "localizado",
-            "external_source": f"SismoVenezuela:{confidence} via {source_label}",
-            "source2_url": source_url,
-        }).eq("id", rec["id"]).execute()
-        updated += 1
-
-    for name, source_url, source_label, lugar in results["no_match"]:
+    for name, source_url, source_label, lugar in new_inserts:
         sb.table("missing_persons").insert({
             "name": name,
             "last_seen_location": lugar,
