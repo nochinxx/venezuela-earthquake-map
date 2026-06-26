@@ -874,6 +874,15 @@ export default function Home() {
         )}
       </div>
 
+      {/* Partner banner */}
+      <div className="shrink-0 flex items-center justify-center gap-2 px-3 py-1 bg-blue-950 border-b border-blue-900 text-xs text-blue-300">
+        <span className="hidden sm:inline">En colaboración con</span>
+        <span className="sm:hidden">Con</span>
+        <a href="https://terremotovenezuela.app" target="_blank" rel="noopener noreferrer" className="font-semibold hover:text-white transition-colors underline underline-offset-2">terremotovenezuela.app</a>
+        <span className="text-blue-700">·</span>
+        <a href="https://terremotovenezuela.com" target="_blank" rel="noopener noreferrer" className="font-semibold hover:text-white transition-colors underline underline-offset-2">terremotovenezuela.com</a>
+      </div>
+
       {/* Header */}
       <div className="bg-gray-900 border-b border-gray-800 shrink-0">
         {/* Main header row */}
