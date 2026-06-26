@@ -23,7 +23,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install requests httpx python-dotenv supabase
+        run: pip install requests httpx python-dotenv supabase beautifulsoup4
 
       # missing_persons_scraper.py is excluded — desaparecidos-terremoto-api.theempire.tech
       # blocks GitHub/cloud IP ranges (ENETUNREACH). Must run from Mac Mini only.
@@ -38,4 +38,8 @@ jobs:
 
       - name: localizados-vzla
         run: python scrapers/localizados_vzla_scraper.py
+        continue-on-error: true
+
+      - name: centrosayuda
+        run: python scrapers/centrosayuda_scraper.py
         continue-on-error: true

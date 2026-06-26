@@ -54,6 +54,9 @@ if [ "$MINUTE" -lt 10 ] || { [ "$MINUTE" -gt 40 ] && [ "$MINUTE" -lt 50 ]; }; th
 
     echo "[localizados-vzla]" >> "$LOG"
     $CONDA scrapers/localizados_vzla_scraper.py >> "$LOG" 2>&1 || echo "[localizados-vzla] FAILED (exit $?)" >> "$LOG"
+
+    echo "[centrosayuda]" >> "$LOG"
+    $CONDA scrapers/centrosayuda_scraper.py >> "$LOG" 2>&1 || echo "[centrosayuda] FAILED (exit $?)" >> "$LOG"
 fi
 
 # Gemma dedup runs once per hour (minutes 0–9 only, i.e. first cycle of each hour)
