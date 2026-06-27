@@ -311,7 +311,7 @@ export default function Home() {
   const [showMissing, setShowMissing] = useState(false);
   const [missingForm, setMissingForm] = useState({ name: "", age: "", last_seen_location: "", description: "", contact_info: "" });
   const [missingStatus, setMissingStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
-  const [showExternalMissing, setShowExternalMissing] = useState(true);
+  const [showExternalMissing, setShowExternalMissing] = useState(false);
   const [externalMissingTotal, setExternalMissingTotal] = useState<number | null>(null);
   const [externalMissingLoading, setExternalMissingLoading] = useState(false);
   const [selectedExternalPerson, setSelectedExternalPerson] = useState<Record<string, unknown> | null>(null);
@@ -960,16 +960,7 @@ export default function Home() {
 
           <span className="text-gray-700 text-xs shrink-0 mx-0.5">·</span>
 
-          {/* Desaparecidos */}
-          <button
-            onClick={() => { setShowExternalMissing(v => !v); if (!showExternalMissing) setPanelTab("personas"); }}
-            className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-colors flex items-center gap-1 ${showExternalMissing ? "bg-violet-800 text-violet-100" : "bg-gray-800 text-gray-500 hover:bg-gray-700"}`}>
-            🧍 Desaparecidos
-            {showExternalMissing && externalMissingTotal != null && <span className="text-violet-300 text-[10px]">· {externalMissingTotal.toLocaleString()}</span>}
-            {showExternalMissing && (
-              <span className="text-violet-400 text-[10px] hover:text-white underline decoration-dotted" onClick={(e) => { e.stopPropagation(); setShowSources(true); }}>↗</span>
-            )}
-          </button>
+          {/* Desaparecidos — hidden while data is being verified */}
 
           {/* Acopios */}
           <button
@@ -1026,10 +1017,7 @@ export default function Home() {
                 className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 ${panelTab === "reports" ? "text-red-400 border-red-500" : "text-gray-500 border-transparent hover:text-gray-300"}`}>
                 📢 Reportes{selected.length > 0 ? ` (${selected.length})` : feed.length > 0 ? ` (${feed.length})` : ""}
               </button>
-              <button onClick={() => setPanelTab("personas")}
-                className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 ${panelTab === "personas" ? "text-violet-400 border-violet-500" : "text-gray-500 border-transparent hover:text-gray-300"}`}>
-                🧍 Personas{missingPanelTotal > 0 ? ` (${missingPanelTotal.toLocaleString()})` : ""}
-              </button>
+              {/* Personas tab hidden while data is being verified */}
               <button onClick={() => setPanelTab("edificios")}
                 className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 ${panelTab === "edificios" ? "text-amber-400 border-amber-500" : "text-gray-500 border-transparent hover:text-gray-300"}`}>
                 🏚 Edificios{buildingCount != null ? ` (${buildingCount})` : ""}
@@ -1128,10 +1116,6 @@ export default function Home() {
             {/* Personas tab */}
             {panelTab === "personas" && (
               <div className="flex flex-col flex-1 overflow-hidden">
-                {/* Data notice */}
-                <div className="px-4 py-2.5 bg-yellow-950/60 border-b border-yellow-800/50 shrink-0 flex items-center justify-between gap-2">
-                  <p className="text-yellow-300 text-xs leading-snug">Datos de desaparecidos en revisión. Para información actualizada visita <a href="https://terremotovenezuela.app" target="_blank" rel="noopener noreferrer" className="underline font-semibold hover:text-yellow-200">terremotovenezuela.app →</a></p>
-                </div>
                 {/* Highlighted person from map click */}
                 {selectedExternalPerson && (() => {
                   const ep = selectedExternalPerson as { nombre?: string; edad?: number; estado?: string; foto?: string; ubicacion?: string; descripcion?: string; contacto?: string; };
@@ -1435,7 +1419,8 @@ export default function Home() {
                 className={`flex-1 py-2.5 text-xs font-semibold border-b-2 ${panelTab === "reports" ? "text-red-400 border-red-500" : "text-gray-500 border-transparent"}`}>
                 📢 Reportes{selected.length > 0 ? ` (${selected.length})` : ""}
               </button>
-              <button onClick={() => setPanelTab("personas")}
+              {/* Personas tab hidden while data is being verified */}
+              <button style={{display:"none"}} onClick={() => setPanelTab("personas")}
                 className={`flex-1 py-2.5 text-xs font-semibold border-b-2 ${panelTab === "personas" ? "text-violet-400 border-violet-500" : "text-gray-500 border-transparent"}`}>
                 🧍 Personas{missingPanelTotal > 0 ? ` (${missingPanelTotal.toLocaleString()})` : ""}
               </button>
@@ -1514,11 +1499,6 @@ export default function Home() {
             )}
 
             {/* Personas tab – mobile */}
-            {panelTab === "personas" && (
-              <div className="px-3 py-2 bg-yellow-950/60 border-b border-yellow-800/50 shrink-0">
-                <p className="text-yellow-300 text-xs">Datos en revisión · <a href="https://terremotovenezuela.app" target="_blank" rel="noopener noreferrer" className="underline font-semibold">terremotovenezuela.app →</a></p>
-              </div>
-            )}
             {panelTab === "personas" && (
               <>
                 {selectedExternalPerson && (() => {
@@ -1762,7 +1742,7 @@ export default function Home() {
               )}
               <div className="flex items-center justify-between gap-3">
                 <a href="https://terremotovenezuela.app" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-xs hover:text-violet-400 transition-colors">Desaparecidos ↗</a>
-                <span className="text-violet-400 font-bold text-xs">{missingTotal != null ? missingTotal.toLocaleString() : "—"}</span>
+                <span className="text-violet-400 font-bold text-xs">terremotovenezuela.app</span>
               </div>
               {foundCount != null && foundCount > 0 && (
                 <div className="flex items-center justify-between gap-3">
@@ -1938,6 +1918,17 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Sticky missing persons notice */}
+      <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-sm px-4 md:px-0 pointer-events-none">
+        <div className="bg-gray-900/98 border border-violet-700 rounded-xl shadow-xl px-4 py-3 flex items-center gap-3 pointer-events-auto">
+          <span className="text-violet-400 text-xl shrink-0">🧍</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-xs font-semibold leading-snug">Buscas a alguien desaparecido?</p>
+            <p className="text-gray-400 text-xs leading-snug">Consulta el directorio actualizado en <a href="https://terremotovenezuela.app" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300 font-semibold underline">terremotovenezuela.app →</a></p>
+          </div>
+        </div>
+      </div>
 
       {/* Sources & partner sites modal */}
       {showSources && (
