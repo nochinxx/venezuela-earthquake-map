@@ -1128,6 +1128,10 @@ export default function Home() {
             {/* Personas tab */}
             {panelTab === "personas" && (
               <div className="flex flex-col flex-1 overflow-hidden">
+                {/* Data notice */}
+                <div className="px-4 py-2.5 bg-yellow-950/60 border-b border-yellow-800/50 shrink-0 flex items-center justify-between gap-2">
+                  <p className="text-yellow-300 text-xs leading-snug">Datos de desaparecidos en revisión. Para información actualizada visita <a href="https://terremotovenezuela.app" target="_blank" rel="noopener noreferrer" className="underline font-semibold hover:text-yellow-200">terremotovenezuela.app →</a></p>
+                </div>
                 {/* Highlighted person from map click */}
                 {selectedExternalPerson && (() => {
                   const ep = selectedExternalPerson as { nombre?: string; edad?: number; estado?: string; foto?: string; ubicacion?: string; descripcion?: string; contacto?: string; };
@@ -1511,6 +1515,11 @@ export default function Home() {
 
             {/* Personas tab – mobile */}
             {panelTab === "personas" && (
+              <div className="px-3 py-2 bg-yellow-950/60 border-b border-yellow-800/50 shrink-0">
+                <p className="text-yellow-300 text-xs">Datos en revisión · <a href="https://terremotovenezuela.app" target="_blank" rel="noopener noreferrer" className="underline font-semibold">terremotovenezuela.app →</a></p>
+              </div>
+            )}
+            {panelTab === "personas" && (
               <>
                 {selectedExternalPerson && (() => {
                   const ep = selectedExternalPerson as { nombre?: string; edad?: number; estado?: string; foto?: string; ubicacion?: string; };
@@ -1752,7 +1761,7 @@ export default function Home() {
                 </div>
               )}
               <div className="flex items-center justify-between gap-3">
-                <span className="text-gray-400 text-xs">Desaparecidos</span>
+                <a href="https://terremotovenezuela.app" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-xs hover:text-violet-400 transition-colors">Desaparecidos ↗</a>
                 <span className="text-violet-400 font-bold text-xs">{missingTotal != null ? missingTotal.toLocaleString() : "—"}</span>
               </div>
               {foundCount != null && foundCount > 0 && (
