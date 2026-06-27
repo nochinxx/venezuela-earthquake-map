@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+
 const LOCATIONS: Record<string, [number, number]> = {
   // Vargas / La Guaira coast (epicenter area)
   "la guaira": [10.6017, -66.9340],
