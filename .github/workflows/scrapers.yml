@@ -36,9 +36,8 @@ jobs:
         run: python scrapers/building_damage_scraper.py
         continue-on-error: true
 
-      - name: localizados-vzla
-        run: python scrapers/localizados_vzla_scraper.py
-        continue-on-error: true
+      # localizados_vzla_scraper.py excluded — was inserting unverified records
+      # inflating localizado count; paused pending data quality review
 
       - name: centrosayuda
         run: python scrapers/centrosayuda_scraper.py

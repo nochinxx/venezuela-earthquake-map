@@ -52,8 +52,8 @@ if [ "$MINUTE" -lt 10 ] || { [ "$MINUTE" -gt 40 ] && [ "$MINUTE" -lt 50 ]; }; th
     echo "[venezulatebusca]" >> "$LOG"
     $CONDA scrapers/venezulatebusca_scraper.py >> "$LOG" 2>&1 || echo "[venezulatebusca] FAILED (exit $?)" >> "$LOG"
 
-    echo "[localizados-vzla]" >> "$LOG"
-    $CONDA scrapers/localizados_vzla_scraper.py >> "$LOG" 2>&1 || echo "[localizados-vzla] FAILED (exit $?)" >> "$LOG"
+    # [localizados-vzla] paused — was inserting unverified records, inflating localizado count
+    # $CONDA scrapers/localizados_vzla_scraper.py >> "$LOG" 2>&1 || echo "[localizados-vzla] FAILED (exit $?)" >> "$LOG"
 
     echo "[centrosayuda]" >> "$LOG"
     $CONDA scrapers/centrosayuda_scraper.py >> "$LOG" 2>&1 || echo "[centrosayuda] FAILED (exit $?)" >> "$LOG"
