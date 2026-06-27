@@ -358,10 +358,11 @@ export default function Home() {
       .then(r => r.json())
       .then((res: { total: number }) => setMissingTotal(res.total ?? null))
       .catch(() => {});
-    fetch(`${API}/missing-persons?count=1&status=encontrado`)
-      .then(r => r.json())
-      .then((res: { total: number }) => setFoundCount(res.total ?? null))
-      .catch(() => {});
+    // foundCount fetch paused — localizado data under review
+    // fetch(`${API}/missing-persons?count=1&status=encontrado`)
+    //   .then(r => r.json())
+    //   .then((res: { total: number }) => setFoundCount(res.total ?? null))
+    //   .catch(() => {});
     fetch(`${API}/needs?limit=200`)
       .then(r => r.json())
       .then((res: { data: Record<string, unknown>[]; total: number }) => {
@@ -1744,12 +1745,7 @@ export default function Home() {
                 <a href="https://terremotovenezuela.app" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-xs hover:text-violet-400 transition-colors">Desaparecidos ↗</a>
                 <span className="text-violet-400 font-bold text-xs">terremotovenezuela.app</span>
               </div>
-              {foundCount != null && foundCount > 0 && (
-                <div className="flex items-center justify-between gap-3">
-                  <a href="/localizados" className="text-gray-400 text-xs hover:text-green-400 transition-colors">Localizados ↗</a>
-                  <span className="text-green-400 font-bold text-xs">{foundCount.toLocaleString()}</span>
-                </div>
-              )}
+              {/* Localizados stat hidden — data under review */}
               {buildingCount != null && buildingCount > 0 && (
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-gray-400 text-xs">Edificios</span>
@@ -1766,20 +1762,7 @@ export default function Home() {
           </div>
 
 
-        {/* Localizados card */}
-        {foundCount != null && foundCount > 0 && (
-          <div className="max-w-[200px]">
-            <a href="/localizados"
-              className="flex flex-col gap-1 bg-cyan-950/95 border border-cyan-700 rounded-lg px-3 py-2.5 hover:opacity-90 transition-opacity">
-              <div className="flex items-center gap-1.5">
-                <span className="text-cyan-400 font-bold text-xs uppercase tracking-wide">🔍 Localizados</span>
-              </div>
-              <p className="text-white text-xs font-semibold leading-tight">{foundCount} personas confirmadas</p>
-              <p className="text-cyan-300 text-xs leading-tight">Cruce de datos por SismoVenezuela</p>
-              <p className="text-cyan-600 text-xs">Ver lista completa →</p>
-            </a>
-          </div>
-        )}
+        {/* Localizados card hidden — data under review */}
         </div>{/* end stats column */}
 
         <div className="absolute bottom-4 left-3 flex flex-col gap-2 z-10 max-w-[180px] md:max-w-none">
