@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -93,69 +92,7 @@ const LOCATIONS: Record<string, [number, number]> = {
   "porlamar": [10.9588, -63.8591],
 };
 
-function geocode(location: string): [number, number] | null {
-  const lower = location.toLowerCase().trim();
-  // Longest-key match first to avoid short keys swallowing longer ones (e.g. "catia" vs "catia la mar")
-  const sorted = Object.entries(LOCATIONS).sort((a, b) => b[0].length - a[0].length);
-  for (const [key, coords] of sorted) {
-    if (lower.includes(key)) return coords;
-  }
-  return null;
-}
-
-const PAGE = 1000;
-
-export const revalidate = 300; // 5-min cache
-
+// Restricted while missing-persons data is under review — see CLAUDE.md
 export async function GET() {
-  try {
-    // Stream all non-duplicate records from our own Supabase table
-    const all: Record<string, unknown>[] = [];
-    let offset = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from("missing_persons")
-        .select("id,name,age,last_seen_location,description,contact_info,external_source,photo_url,submitted_at")
-        .or("is_duplicate.eq.false,is_duplicate.is.null")
-        .or("status.eq.sin-contacto,status.is.null")
-        .range(offset, offset + PAGE - 1);
-      if (error || !data?.length) break;
-      all.push(...data);
-      if (data.length < PAGE) break;
-      offset += PAGE;
-    }
-
-    const features = all
-      .map((item) => {
-        const loc = String(item.last_seen_location ?? "");
-        const coords = geocode(loc);
-        if (!coords) return null;
-        // Small random jitter so stacked pins don't collapse into one dot
-        const jitter = () => (Math.random() - 0.5) * 0.006;
-        return {
-          type: "Feature" as const,
-          geometry: { type: "Point" as const, coordinates: [coords[1] + jitter(), coords[0] + jitter()] },
-          properties: {
-            id: item.id,
-            nombre: item.name,
-            edad: item.age,
-            ubicacion: item.last_seen_location,
-            descripcion: item.description,
-            contacto: item.contact_info,
-            foto: item.photo_url,
-            estado: null,
-            external_source: item.external_source,
-          },
-        };
-      })
-      .filter(Boolean);
-
-    return NextResponse.json({
-      type: "FeatureCollection",
-      features,
-      meta: { total: all.length, geolocated: features.length },
-    }, { headers: { "Cache-Control": "s-maxage=60, stale-while-revalidate=300" } });
-  } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
-  }
+  return NextResponse.json({ error: "Temporarily unavailable" }, { status: 403 });
 }
