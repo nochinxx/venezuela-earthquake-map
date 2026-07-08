@@ -126,16 +126,29 @@ def is_relief_post(text: str) -> bool:
     return any(s in t for s in CENTER_SIGNALS)
 
 
+def expire_stale(days: int = 7):
+    """Remove relief centers not confirmed in the last N days."""
+    from datetime import datetime, timezone, timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    res = sb.table("relief_centers").delete().lt("last_confirmed_at", cutoff).execute()
+    deleted = len(res.data) if res.data else 0
+    if deleted:
+        print(f"[relief_centers] Expired {deleted} stale centers (>{days} days old)")
+
+
 def seed():
     print("[relief_centers] Seeding Comando Venezuela locations...")
+    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
     for center in SEED_CENTERS:
         # Check if address already exists to avoid duplicates
         existing = sb.table("relief_centers").select("id").eq("address", center["address"]).execute().data
         if existing:
-            print(f"  (skip) {center['name']} already in DB")
+            # Bump last_confirmed_at on re-seed so seeds don't expire
+            sb.table("relief_centers").update({"last_confirmed_at": now}).eq("address", center["address"]).execute()
+            print(f"  (refresh) {center['name']}")
             continue
         try:
-            sb.table("relief_centers").insert(center).execute()
+            sb.table("relief_centers").insert({**center, "last_confirmed_at": now}).execute()
             print(f"  ✓ {center['name']}")
         except Exception as e:
             print(f"  [error] {center['name']}: {e}")
@@ -183,11 +196,14 @@ def scrape_x():
                     "accepted_items": "",
                 }
                 try:
+                    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
                     existing = sb.table("relief_centers").select("id").eq("address", text[:300]).execute().data
                     if existing:
+                        # Refresh confirmation timestamp on re-discovery
+                        sb.table("relief_centers").update({"last_confirmed_at": now}).eq("address", text[:300]).execute()
                         continue
                     sb.table("relief_centers").insert(
-                        {k: v for k, v in payload.items() if v is not None}
+                        {k: v for k, v in {**payload, "last_confirmed_at": now}.items() if v is not None}
                     ).execute()
                     found += 1
                     print(f"    → {payload['name']} in {loc}")
@@ -199,6 +215,7 @@ def scrape_x():
 
 
 def main():
+    expire_stale(days=7)
     seed()
     scrape_x()
 

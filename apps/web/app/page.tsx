@@ -350,6 +350,21 @@ export default function Home() {
   const buildingPopupRef = useRef<mapboxgl.Popup | null>(null);
   const [feed, setFeed] = useState<Report[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
+  const [lang, setLang] = useState<"es" | "en">("es");
+  const [showNews, setShowNews] = useState(false);
+  const [newsDigest, setNewsDigest] = useState<{
+    digest_date: string;
+    deaths_confirmed: number | null;
+    injuries_confirmed: number | null;
+    infrastructure: string;
+    gov_response: string;
+    key_events: string[];
+    key_events_en: string[];
+    es_summary: string;
+    en_summary: string;
+    sources: string[];
+    generated_at: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!localStorage.getItem("wt_seen")) setShowWalkthrough(true);
@@ -357,6 +372,10 @@ export default function Home() {
     fetch(`${API}/missing-persons?count=1&status=sin-contacto`)
       .then(r => r.json())
       .then((res: { total: number }) => setMissingTotal(res.total ?? null))
+      .catch(() => {});
+    fetch("/api/news-digest")
+      .then(r => r.json())
+      .then((res: { digest: typeof newsDigest }) => { if (res.digest) setNewsDigest(res.digest); })
       .catch(() => {});
     // foundCount fetch paused — localizado data under review
     // fetch(`${API}/missing-persons?count=1&status=encontrado`)
@@ -918,6 +937,18 @@ export default function Home() {
               className="px-2 py-0.5 rounded text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 hidden sm:flex items-center gap-1 shrink-0"
               title="Fuentes y recursos aliados">
               🔗 Fuentes
+            </button>
+            <button
+              onClick={() => setShowNews(true)}
+              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors shrink-0 ${newsDigest ? "bg-blue-800 hover:bg-blue-700 text-blue-200" : "bg-gray-800 hover:bg-gray-700 text-gray-400"}`}
+              title={lang === "es" ? "Últimas noticias analizadas" : "Latest news analysis"}>
+              📰 {lang === "es" ? "Noticias" : "News"}
+            </button>
+            <button
+              onClick={() => setLang(l => l === "es" ? "en" : "es")}
+              className="px-2 py-0.5 rounded text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 font-mono shrink-0"
+              title="Switch language / Cambiar idioma">
+              {lang === "es" ? "EN" : "ES"}
             </button>
             <button onClick={() => { setShowWalkthrough(true); setWalkthroughStep(0); }}
               className="w-7 h-7 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-bold flex items-center justify-center shrink-0"
@@ -2299,6 +2330,116 @@ export default function Home() {
               }}
               status={needsFormStatus}
             />
+          </div>
+        </div>
+      )}
+
+      {/* ── News digest modal ─────────────────────────────────────── */}
+      {showNews && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setShowNews(false); }}>
+          <div className="bg-gray-900 border border-blue-800/60 rounded-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 shrink-0">
+              <div>
+                <h2 className="font-bold text-white text-base">
+                  📰 {lang === "es" ? "Últimas noticias analizadas" : "Latest news analysis"}
+                </h2>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {newsDigest
+                    ? `${newsDigest.digest_date} · Gemma 4`
+                    : lang === "es" ? "Sin resumen disponible" : "No digest available"}
+                </p>
+              </div>
+              <button onClick={() => setShowNews(false)} className="text-gray-500 hover:text-white text-2xl leading-none ml-4">×</button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4 flex flex-col gap-4">
+              {!newsDigest ? (
+                <p className="text-gray-400 text-sm text-center py-6">
+                  {lang === "es"
+                    ? "Ejecuta scrapers/news_digest.py para generar el primer resumen."
+                    : "Run scrapers/news_digest.py to generate the first digest."}
+                </p>
+              ) : (
+                <>
+                  {/* Summary paragraph */}
+                  <p className="text-gray-200 text-sm leading-relaxed">
+                    {lang === "es" ? newsDigest.es_summary : newsDigest.en_summary}
+                  </p>
+
+                  {/* Stat chips */}
+                  {(newsDigest.deaths_confirmed != null || newsDigest.injuries_confirmed != null) && (
+                    <div className="flex gap-2 flex-wrap">
+                      {newsDigest.deaths_confirmed != null && (
+                        <span className="px-2.5 py-1 rounded-full bg-red-950 text-red-300 text-xs font-medium border border-red-800/40">
+                          {newsDigest.deaths_confirmed} {lang === "es" ? "confirmados" : "confirmed deaths"}
+                        </span>
+                      )}
+                      {newsDigest.injuries_confirmed != null && (
+                        <span className="px-2.5 py-1 rounded-full bg-orange-950 text-orange-300 text-xs font-medium border border-orange-800/40">
+                          {newsDigest.injuries_confirmed}+ {lang === "es" ? "heridos" : "injured"}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Key events */}
+                  {(lang === "es" ? newsDigest.key_events : newsDigest.key_events_en).length > 0 && (
+                    <div>
+                      <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">
+                        {lang === "es" ? "Eventos clave" : "Key developments"}
+                      </p>
+                      <ul className="flex flex-col gap-1.5">
+                        {(lang === "es" ? newsDigest.key_events : newsDigest.key_events_en).map((ev, i) => (
+                          <li key={i} className="flex gap-2 text-sm text-gray-300">
+                            <span className="text-blue-500 shrink-0 mt-0.5">▸</span>
+                            {ev}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Infrastructure */}
+                  {newsDigest.infrastructure && (
+                    <div className="p-3 rounded-xl bg-gray-800/60 border border-gray-700/40">
+                      <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">
+                        {lang === "es" ? "Infraestructura" : "Infrastructure"}
+                      </p>
+                      <p className="text-gray-300 text-sm">{newsDigest.infrastructure}</p>
+                    </div>
+                  )}
+
+                  {/* Government response */}
+                  {newsDigest.gov_response && (
+                    <div className="p-3 rounded-xl bg-gray-800/60 border border-gray-700/40">
+                      <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">
+                        {lang === "es" ? "Respuesta gubernamental" : "Government response"}
+                      </p>
+                      <p className="text-gray-300 text-sm">{newsDigest.gov_response}</p>
+                    </div>
+                  )}
+
+                  {/* Sources */}
+                  {newsDigest.sources.length > 0 && (
+                    <div>
+                      <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">
+                        {lang === "es" ? "Fuentes" : "Sources"}
+                      </p>
+                      <div className="flex flex-col gap-1">
+                        {newsDigest.sources.slice(0, 5).map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300 text-xs truncate">
+                            {url.replace(/^https?:\/\//, "").split("/")[0]}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

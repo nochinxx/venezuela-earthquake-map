@@ -59,10 +59,14 @@ if [ "$MINUTE" -lt 10 ] || { [ "$MINUTE" -gt 40 ] && [ "$MINUTE" -lt 50 ]; }; th
     $CONDA scrapers/centrosayuda_scraper.py >> "$LOG" 2>&1 || echo "[centrosayuda] FAILED (exit $?)" >> "$LOG"
 fi
 
-# Gemma dedup runs once per hour (minutes 0–9 only, i.e. first cycle of each hour)
-# Incremental — only checks records added since last run, so it's fast after the first pass
+# Gemma jobs run once per hour (minutes 0–9 only, i.e. first cycle of each hour)
 HOUR_MINUTE=$(date +%M)
 if [ "$HOUR_MINUTE" -lt 10 ]; then
+    # Dedup — incremental, fast after first pass
     echo "[dedup-gemma]" >> "$LOG"
     $CONDA scrapers/dedup_gemma.py >> "$LOG" 2>&1 || echo "[dedup-gemma] FAILED (exit $?)" >> "$LOG"
+
+    # News digest — idempotent, skips if already ran today
+    echo "[news-digest]" >> "$LOG"
+    $CONDA scrapers/news_digest.py >> "$LOG" 2>&1 || echo "[news-digest] FAILED (exit $?)" >> "$LOG"
 fi
