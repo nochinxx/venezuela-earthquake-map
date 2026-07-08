@@ -55,7 +55,7 @@ export default function Image() {
         </div>
 
         <div style={{ color: "#4b5563", fontSize: 18, marginTop: 32 }}>
-          venezuela-earthquake-map.vercel.app
+          sismovenezuela.com
         </div>
       </div>
     ),
