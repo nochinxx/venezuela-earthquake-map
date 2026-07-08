@@ -1,6 +1,12 @@
 # SismoVenezuela — Agent Briefing
 
-Real-time earthquake damage and missing persons map for the June 24, 2026 Venezuela earthquake (M7.1–7.5 near Yumare/La Guaira). Public at **sismovenezuela.com** (Vercel). Open source.
+Real-time damage and missing persons map for the **June 24, 2026 Venezuela doublet earthquakes**. Two distinct events (not one):
+- **Sismo 1:** M7.2 · 18:04:33 local (22:04:33 UTC) · 23km NE of San Felipe, Yaracuy · depth 20.3km
+- **Sismo 2:** M7.5 · 18:05:12 local (39 seconds later) · 28km SE of Yumare · depth 10km
+
+All copy, metadata, and data framing must reference BOTH events. Never describe this as a single M7.1 earthquake.
+
+Public at **sismovenezuela.com** (Vercel). Open source.
 
 ---
 
@@ -112,7 +118,12 @@ SUPABASE_SERVICE_KEY=...
 | `source_id` | **original platform ID** — NEVER overwrite on update. Deep-link key: `?persona=<source_id>` |
 | `source2_url` | URL of tweet/post that confirmed the person as located (set by match_hospital_list.py) |
 | `is_duplicate` | bool — cross-platform dedup flag. All queries must include `.or("is_duplicate.eq.false,is_duplicate.is.null")` |
+| `last_verified_at` | timestamptz — when this record was last confirmed by a scraper run. NULL = predates Phase 2. Stale = >7 days old. |
+| `status_history` | jsonb array — auto-appended by trigger on every status change: `[{from, to, changed_at, source}]` |
 | `submitted_at` | timestamp |
+
+**Phase 2 migration:** `supabase/migrations/20260707_missing_persons_quality.sql` — apply in Supabase SQL editor before running dedup job.
+**Dedup job:** `scrapers/weekly_dedup.py` — run weekly, dry-run by default, `--commit` to write.
 
 **Status semantics:**
 - `sin-contacto` / `null` → actively missing (shown on map + desaparecidos panel)
@@ -335,6 +346,11 @@ When someone sends a photo/tweet with a hospital patient list:
 | Hospital Pérez Carreño | Pediatría 06/26 | @elhabito/2070174496913236064 | 15 | 5 | 10 |
 | Hospital Pérez Carreño | Adult ward | @uiteraardpaard/2070143455385317665 | 86 | 46 | 40 |
 | Multi-hospital consolidado (Pérez Carreño + Luciani + HUC + Baquero + Vargas) | 25 jun 2026 | @mariangelli (PDF) | 299 | 68 | 231 |
+| Hospital Pérez Carreño (La Yaguara) | Adult ward | @ForoCivicoVzla/2070213406800388337 | 79 | 77 | 2 |
+| Hospital Pérez Carreño (La Yaguara) | Pediatría | @ForoCivicoVzla/2070213406800388337 | 15 | 15 | 0 |
+| Hospital General del Oeste | 25 jun 2026 | @ForoCivicoVzla/2070213406800388337 | 9 | 1 | 8 |
+| Hospital Domingo Luciani | Pediatría (handwritten) | @ForoCivicoVzla/2070213406800388337 | 15 | 7 | 8 |
+| Hospital Periférico de Catia | Adult ward (spreadsheet) | @ForoCivicoVzla/2070213406800388337 | 42 | 10 | 32 |
 | localizadosvenezuela.com (all hospitals) | Full API sync | https://localizadosvenezuela.com/api | 1997 | 2 (cédula only) | 1995 |
 
 ---
@@ -450,3 +466,79 @@ npm run dev   # :3001
 # TypeScript check
 ./node_modules/.bin/tsc --noEmit
 ```
+
+---
+
+## Phase 2 Direction (Jul 7 2026) — Daily Intelligence Platform
+
+Mario's direction: shift from 72-hour emergency response tool to a **persistent daily intelligence platform** for ongoing earthquake recovery. Two earthquakes occurred (not one — update all framing accordingly). Use Gemma 4 + local inference for deeper analysis. Add English-language support.
+
+### Corrections first
+- **Two earthquakes** happened — confirm exact dates/magnitudes from FUNVISIS and update all DB records, map labels, and copy to reflect both events correctly
+- Update sismovenezuela.com header/about to reference both events
+- Check `terremotovenezuela.com` and FUNVISIS for the second event record
+
+### Feature direction
+
+**1. Gemma 4 news analysis pipeline**
+- Pull daily news from Google News / RSS (Venezuela earthquake coverage), run through Gemma 4 locally
+- Extract: new confirmed deaths, missing updates, infrastructure status, government response actions
+- Store structured daily digest in DB
+- Frontend: "Últimas noticias procesadas" card with date + key facts + source links
+- Goal: people can check in daily and see a single clear summary of what changed
+
+**2. Missing persons — stability and data quality**
+- Current state: 42K+ sin-contacto records, data is "flaky/sketchy" per Mario
+- Issues: duplicates across desaparecidos-vzla / venezulatebusca / manual entries, status drift, no audit trail
+- Fix: add `last_verified_at` column, run weekly dedup job (cedula-based first, then fuzzy name), surface stale records (>7 days not updated) separately
+- PII rules (see Security section below)
+
+**3. Relief centers — find stable source**
+- X scraping is unreliable (centers open/close constantly, no official feed)
+- Investigate: Cruz Roja Venezuela (cruzroja.org.ve), FUNVISIS, Protección Civil for structured data
+- Check: `terremotovenezuela.com` API — already scraping their public Supabase for building damage, check if they expose relief center data too
+- Goal: single verified source rather than social media scraping; mark each center with `last_confirmed_at` and auto-expire after 7 days without confirmation
+
+**4. Statistical analysis layer (Gemma 4)**
+- Daily: missing count trend (sin-contacto → localizado conversion rate over time)
+- Damage map: compare Day 1 vs current — what areas still have active needs vs resolved
+- Compare current event stats to historical Venezuela earthquakes (1967 Caracas, 1997 Cariaco) for context
+- English output: auto-generate English summary alongside Spanish for international audience
+
+**5. terremotovenezuela.com API**
+- Already connected: `building_damage_scraper.py` reads their public Supabase directly
+- Check if they expose relief center or missing persons data beyond buildings
+- Explore: FUNVISIS seismic API for aftershock tracking — auto-flag significant aftershocks (>M4) on the map
+- Also check if their infrastructure covers BOTH earthquakes (confirm second event is in their DB)
+
+**6. English version**
+- Bilingual toggle (ES/EN) in UI
+- All static copy translated
+- Gemma 4 auto-translates daily digest for EN users
+- SEO: separate `/en/` route or `?lang=en` param so international journalists can link to English version
+
+### Security + PII best practices
+
+**What must be private:**
+- Cedulas (Venezuelan national ID) — NEVER expose via public API. Keep in DB for matching only, never return in GET responses. Already done for desaparecidos-vzla; verify all API routes.
+- Contact info for families — phone numbers, emails. Return only to verified submitters.
+- Photos of missing persons — only show if submitted with consent flag; default to name + description only.
+- Hospital list raw data — after processing, archive; don't expose which hospital confirmed which person (family can look up their person, not browse a hospital roster).
+
+**What can be public:**
+- Name, approximate age, last seen location, status (sin-contacto / localizado / encontrado)
+- Aggregate counts (total missing, total localizados, by state)
+- Building damage locations and damage type
+- Relief center info (address, accepted items)
+- News digest (fully public, no PII)
+
+**Audit trail:**
+- Every status change on a missing person should log: `changed_by`, `changed_at`, `source` — add `status_history` JSONB column
+- This protects against accidental or malicious status changes
+
+### API audit (do before shipping v2)
+Run through every public-facing route and verify:
+- [ ] `/api/missing-persons` — cedula never returned
+- [ ] `/api/missing-persons/external` — cedula never returned, contact_info excluded
+- [ ] Supabase RLS policies — anon key cannot read `cedula` or `contact_info` columns (use column-level security or views)
+- [ ] Rate limiting on search endpoints — prevent bulk data harvesting

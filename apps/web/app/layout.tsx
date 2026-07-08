@@ -16,10 +16,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://sismovenezuela.com"),
   title: "SismoVenezuela — Daños en tiempo real",
-  description: "Mapa en tiempo real de daños del terremoto en Venezuela (24 Jun 2026). Reportes de YouTube, X/Twitter e Instagram. Centros de acopio y números de emergencia.",
+  description: "Mapa en tiempo real de los sismos en Venezuela (24 Jun 2026, M7.2 + M7.5). Reportes de YouTube, X/Twitter e Instagram. Desaparecidos, centros de acopio y números de emergencia.",
   openGraph: {
     title: "SismoVenezuela — Daños en tiempo real",
-    description: "Terremoto M7.2 · 24 Jun 2026 · Reportes en tiempo real de YouTube, X e Instagram",
+    description: "Doblete sísmico M7.2 + M7.5 · 24 Jun 2026 · Reportes en tiempo real de YouTube, X e Instagram",
     siteName: "SismoVenezuela",
     locale: "es_VE",
     type: "website",
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "SismoVenezuela — Daños en tiempo real",
-    description: "Terremoto M7.2 · 24 Jun 2026 · Reportes en tiempo real",
+    description: "Doblete sísmico M7.2 + M7.5 · 24 Jun 2026 · Reportes en tiempo real",
   },
   icons: {
     apple: "/apple-touch-icon.png",

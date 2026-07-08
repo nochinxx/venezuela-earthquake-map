@@ -37,7 +37,7 @@ export default function Image() {
           🇻🇪 SismoVenezuela
         </div>
         <div style={{ color: "#d1d5db", fontSize: 28, marginTop: 16, textAlign: "center" }}>
-          Daños en tiempo real · Terremoto 24 Jun 2026
+          Daños en tiempo real · Doblete sísmico M7.2+M7.5 · 24 Jun 2026
         </div>
 
         {/* Stats row */}

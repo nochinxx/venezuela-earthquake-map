@@ -199,7 +199,7 @@ const WALKTHROUGH_STEPS = [
   {
     icon: "🧍",
     title: "Desaparecidos",
-    desc: "Los clústeres violetas consolidan +9.500 reportes de desaparecidos de desaparecidosterremotovenezuela.com y venezulatebusca.com. El panel lateral 'Personas' permite buscar por nombre.",
+    desc: "Los clústeres violetas consolidan +42.000 personas desaparecidas de desaparecidosterremotovenezuela.com y venezulatebusca.com. El panel lateral 'Personas' permite buscar por nombre.",
   },
   {
     icon: "📦",
@@ -1921,7 +1921,7 @@ export default function Home() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 shrink-0">
               <div>
                 <h2 className="font-bold text-white text-lg">🔗 Fuentes y recursos aliados</h2>
-                <p className="text-gray-500 text-xs mt-0.5">Plataformas ciudadanas que están respondiendo al terremoto del 24 Jun 2026</p>
+                <p className="text-gray-500 text-xs mt-0.5">Plataformas ciudadanas respondiendo al doblete sísmico del 24 Jun 2026 (M7.2 + M7.5)</p>
               </div>
               <button onClick={() => setShowSources(false)} className="text-gray-500 hover:text-white text-2xl leading-none ml-4">×</button>
             </div>
@@ -2086,7 +2086,7 @@ export default function Home() {
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="font-bold text-white text-lg">🧍 Persona desaparecida</h2>
-                <p className="text-gray-400 text-xs mt-0.5">Reporta a alguien que no has podido contactar desde el terremoto.</p>
+                <p className="text-gray-400 text-xs mt-0.5">Reporta a alguien que no has podido contactar desde los sismos del 24 Jun.</p>
               </div>
               <button onClick={() => setShowMissing(false)} className="text-gray-500 hover:text-white text-2xl leading-none ml-2">×</button>
             </div>
