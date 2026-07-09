@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -10,22 +10,16 @@ const HISTORICAL = [
 ];
 
 export async function GET() {
-  const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   const [buildingsRes, centersRes, reportsRes] = await Promise.all([
-    sb.from("building_damage").select("damage_type"),
-    // last_confirmed_at added in migration 20260707_relief_centers_expiry.sql
-    sb.from("relief_centers").select("id").then(r => r),
-    sb.from("reports").select("id", { count: "exact", head: true }),
+    supabase.from("building_damage").select("damage_type"),
+    supabase.from("relief_centers").select("id"),
+    supabase.from("reports").select("id", { count: "exact", head: true }),
   ]);
 
   // Try to get last_confirmed_at separately; gracefully degrade if column not yet migrated
   let centersTs: { id: string; last_confirmed_at: string | null }[] = [];
   try {
-    const r = await sb.from("relief_centers").select("id,last_confirmed_at");
+    const r = await supabase.from("relief_centers").select("id,last_confirmed_at");
     centersTs = (r.data ?? []) as typeof centersTs;
   } catch { /* migration 20260707_relief_centers_expiry.sql not yet applied */ }
 
