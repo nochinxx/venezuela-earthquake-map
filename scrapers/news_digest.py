@@ -38,7 +38,7 @@ MAX_ARTICLES = 20
 MAX_AGE_DAYS = 2
 
 
-def ollama(prompt: str, model: str = OLLAMA_MODEL, timeout: int = 180) -> str:
+def ollama(prompt: str, model: str = OLLAMA_MODEL, timeout: int = 600) -> str:
     resp = httpx.post(
         f"{OLLAMA_URL}/api/generate",
         json={"model": model, "prompt": prompt, "stream": False},

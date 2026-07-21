@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """
-youtube.py — Search YouTube for Venezuela earthquake videos and push to the API.
+youtube.py — Search YouTube for Venezuela earthquake videos and push to Supabase.
 
 Run: conda run -n agent python scrapers/youtube.py
 """
-import os, json, httpx, subprocess, tempfile, sys
+import os, json, subprocess, sys
 from datetime import datetime, timezone
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=Path(__file__).parent / ".env")
+from supabase import create_client
 sys.path.insert(0, str(Path(__file__).parent))
 from guardrails import is_credible, cap_damage
 
-API_URL = os.environ.get("API_URL", "http://localhost:8000")
+sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
 SEARCH_QUERIES = [
     "terremoto Venezuela junio 2026",
@@ -112,8 +115,8 @@ def push_report(video: dict) -> bool:
     }
 
     try:
-        r = httpx.post(f"{API_URL}/ingest", json=payload, timeout=10)
-        return r.status_code == 201
+        sb.table("reports").upsert(payload, on_conflict="source_url").execute()
+        return True
     except Exception as e:
         print(f"  [push error] {e}")
         return False

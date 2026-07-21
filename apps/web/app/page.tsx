@@ -791,25 +791,7 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
-  // Missing persons panel loader — resets list when filters/search change
-  useEffect(() => {
-    if (panelTab !== "personas") return;
-    setMissingPanelOffset(0);
-    setMissingPanelList([]);
-    setMissingPanelLoading(true);
-    const p = new URLSearchParams({ limit: "100", offset: "0" });
-    if (missingSearch) p.set("q", missingSearch);
-    if (missingStatusFilter) p.set("status", missingStatusFilter);
-    fetch(`${API}/missing-persons?${p}`)
-      .then(r => r.json())
-      .then((res: { data: MissingPerson[]; total: number }) => {
-        setMissingPanelList(res.data ?? []);
-        setMissingPanelTotal(res.total ?? 0);
-        setMissingPanelOffset(100);
-      })
-      .catch(() => {})
-      .finally(() => setMissingPanelLoading(false));
-  }, [panelTab, missingSearch, missingStatusFilter]);
+  // Missing persons panel — data no longer loaded here; panel redirects to external platforms
 
   function loadMoreMissing() {
     setMissingPanelLoading(true);
@@ -1145,125 +1127,86 @@ export default function Home() {
               </div>
             )}
 
-            {/* Personas tab */}
+            {/* Personas tab — redirects to dedicated platforms */}
             {panelTab === "personas" && (
-              <div className="flex flex-col flex-1 overflow-hidden">
-                {/* Highlighted person from map click */}
+              <div className="flex flex-col flex-1 overflow-y-auto p-4 gap-4">
+                {/* Selected person callout from map click */}
                 {selectedExternalPerson && (() => {
-                  const ep = selectedExternalPerson as { nombre?: string; edad?: number; estado?: string; foto?: string; ubicacion?: string; descripcion?: string; contacto?: string; };
+                  const ep = selectedExternalPerson as { nombre?: string; edad?: number; estado?: string; source_id?: string; };
+                  const searchUrl = ep.source_id
+                    ? `https://desaparecidosterremotovenezuela.com/?persona=${ep.source_id}`
+                    : ep.nombre
+                    ? `https://desaparecidosterremotovenezuela.com/?q=${encodeURIComponent(ep.nombre)}`
+                    : "https://desaparecidosterremotovenezuela.com";
                   return (
-                    <div className="px-4 py-3 border-b border-violet-800/40 bg-violet-950/20 shrink-0">
-                      <div className="flex items-start gap-3">
-                        {ep.foto
-                          // eslint-disable-next-line @next/next/no-img-element
-                          ? <img src={ep.foto} alt={ep.nombre ?? ""} className="w-14 h-14 rounded-lg object-cover shrink-0 border border-gray-700" />
-                          : null}
-                        <div className="flex-1 min-w-0">
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${ep.estado === "localizado" ? "bg-green-800 text-green-300" : "bg-violet-900 text-violet-300"}`}>
-                            {ep.estado === "localizado" ? "✓ Localizado" : "Sin contacto"}
-                          </span>
-                          <p className="font-bold text-white text-sm mt-1 truncate">{ep.nombre}</p>
-                          {ep.edad ? <p className="text-gray-400 text-xs">{ep.edad} años</p> : null}
-                          {ep.ubicacion ? <p className="text-gray-400 text-xs truncate">📍 {ep.ubicacion}</p> : null}
-                          {ep.descripcion ? <p className="text-gray-500 text-xs line-clamp-2 mt-0.5">{ep.descripcion}</p> : null}
-                          <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer" className="text-xs text-violet-400 hover:text-violet-300 mt-1 inline-block">
-                            desaparecidosterremotovenezuela.com →
-                          </a>
-                        </div>
-                        <button onClick={() => setSelectedExternalPerson(null)} className="text-gray-500 hover:text-white text-lg leading-none shrink-0">×</button>
+                    <div className="bg-violet-950/30 border border-violet-800/40 rounded-lg px-4 py-3 flex items-start gap-3 shrink-0">
+                      <div className="flex-1 min-w-0">
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${ep.estado === "localizado" ? "bg-green-800 text-green-300" : "bg-violet-900 text-violet-300"}`}>
+                          {ep.estado === "localizado" ? "✓ Localizado" : "Sin contacto"}
+                        </span>
+                        {ep.nombre && <p className="font-bold text-white text-sm mt-1">{ep.nombre}</p>}
+                        {ep.edad ? <p className="text-gray-400 text-xs">{ep.edad} años</p> : null}
+                        <a href={searchUrl} target="_blank" rel="noopener noreferrer"
+                          className="text-xs text-violet-400 hover:text-violet-300 mt-2 inline-block font-medium">
+                          Buscar en desaparecidosterremotovenezuela.com →
+                        </a>
                       </div>
+                      <button onClick={() => setSelectedExternalPerson(null)} className="text-gray-500 hover:text-white text-lg leading-none shrink-0">×</button>
                     </div>
                   );
                 })()}
-                {/* Search + filters */}
-                <div className="px-4 py-3 border-b border-gray-800 shrink-0 flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-gray-400 text-xs">
-                      {missingPanelLoading && missingPanelList.length === 0 ? "Cargando..." : (
-                        <><span className="text-white font-medium">{missingPanelList.length}</span> de <span className="text-white font-medium">{missingPanelTotal.toLocaleString()}</span> registros</>
-                      )}
-                    </p>
-                    <button onClick={() => { setShowMissing(true); setMissingStatus("idle"); }} className="px-2 py-0.5 rounded text-xs bg-orange-800 hover:bg-orange-700 text-white">+ Reportar</button>
+
+                {/* Count context */}
+                {externalMissingTotal != null && (
+                  <div>
+                    <p className="text-2xl font-bold text-white">{externalMissingTotal.toLocaleString()}</p>
+                    <p className="text-gray-400 text-sm">personas sin contacto reportadas</p>
                   </div>
-                  <input value={missingSearch} onChange={e => setMissingSearch(e.target.value)} placeholder="Buscar por nombre..."
-                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500" />
-                  <div className="flex gap-1">
-                    {([["", "Todos"], ["sin-contacto", "Sin contacto"], ["encontrado", "Encontrados"]] as const).map(([val, label]) => (
-                      <button key={val} onClick={() => setMissingStatusFilter(val)}
-                        className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${missingStatusFilter === val ? (val === "encontrado" ? "bg-green-700 text-white" : "bg-violet-700 text-white") : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                )}
+
+                <p className="text-gray-500 text-xs leading-relaxed">
+                  SismoVenezuela no gestiona estos datos directamente. Busca por nombre en las plataformas especializadas:
+                </p>
+
+                {/* External platform links */}
+                <div className="flex flex-col gap-2">
+                  <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between px-4 py-3 rounded-lg bg-violet-950/50 border border-violet-800/50 hover:border-violet-500 transition-colors">
+                    <div>
+                      <p className="text-white text-sm font-semibold">desaparecidosterremotovenezuela.com</p>
+                      <p className="text-violet-400 text-xs">Búsqueda por nombre</p>
+                    </div>
+                    <span className="text-violet-400 text-base shrink-0">↗</span>
+                  </a>
+                  <a href="https://venezulatebusca.com" target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between px-4 py-3 rounded-lg bg-violet-950/50 border border-violet-800/50 hover:border-violet-500 transition-colors">
+                    <div>
+                      <p className="text-white text-sm font-semibold">venezulatebusca.com</p>
+                      <p className="text-violet-400 text-xs">Búsqueda por nombre o cédula</p>
+                    </div>
+                    <span className="text-violet-400 text-base shrink-0">↗</span>
+                  </a>
+                  <a href="https://terremotovenezuela.app" target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between px-4 py-3 rounded-lg bg-violet-950/50 border border-violet-800/50 hover:border-violet-500 transition-colors">
+                    <div>
+                      <p className="text-white text-sm font-semibold">terremotovenezuela.app</p>
+                      <p className="text-violet-400 text-xs">Plataforma integral</p>
+                    </div>
+                    <span className="text-violet-400 text-base shrink-0">↗</span>
+                  </a>
                 </div>
-                {/* List */}
-                <div className="overflow-y-auto flex flex-col divide-y divide-gray-800 flex-1">
-                  {missingPanelList.map((p) => (
-                    <div key={p.id} className="px-4 py-3 flex gap-3 hover:bg-gray-800/50 transition-colors">
-                      {p.photo_url
-                        // eslint-disable-next-line @next/next/no-img-element
-                        ? <img src={p.photo_url} alt={p.name} className="w-12 h-12 rounded-lg object-cover shrink-0 border border-gray-700" />
-                        : <div className="w-12 h-12 rounded-lg bg-gray-800 shrink-0 flex items-center justify-center text-gray-600 text-lg">👤</div>}
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="font-semibold text-white text-sm truncate">{p.name}</p>
-                          {p.age ? <span className="text-gray-500 text-xs shrink-0">{p.age} años</span> : null}
-                          <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${(p.status === "encontrado" || p.status === "localizado") ? "bg-green-900 text-green-300" : "bg-orange-900/50 text-orange-400"}`}>
-                            {(p.status === "encontrado" || p.status === "localizado") ? "✓ Localizado" : "Sin contacto"}
-                          </span>
-                        </div>
-                        {p.last_seen_location ? <p className="text-gray-400 text-xs truncate">📍 {p.last_seen_location}</p> : null}
-                        {p.contact_info ? <p className="text-gray-500 text-xs truncate">☎ {p.contact_info}</p> : null}
-                        <div className="flex flex-col gap-0.5 mt-0.5">
-                          {String(p.external_source ?? "").includes("SismoVenezuela") && (
-                            <p className="text-[10px] text-cyan-400 font-medium">🔍 Cruce de datos por SismoVenezuela</p>
-                          )}
-                          {/* Source platform link */}
-                          {p.external_source && !String(p.external_source).includes("SismoVenezuela") && (() => {
-                            const isDesap = String(p.external_source).includes("desaparecidos");
-                            const personUrl = isDesap && p.source_id
-                              ? `https://desaparecidosterremotovenezuela.com/?persona=${p.source_id}`
-                              : isDesap ? "https://desaparecidosterremotovenezuela.com" : "https://venezulatebusca.com";
-                            const platformLabel = isDesap ? "desaparecidosterremotovenezuela.com" : "venezulatebusca.com";
-                            return (
-                              <a href={personUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-400 hover:text-violet-200">
-                                📋 {p.source_id ? "Ver ficha" : "Fuente"}: {platformLabel} ↗
-                              </a>
-                            );
-                          })()}
-                          {/* Direct report link — source2_url is the tweet / hospital list that reported them */}
-                          {p.source2_url && (
-                            <a href={String(p.source2_url)} target="_blank" rel="noopener noreferrer"
-                              className={`text-xs hover:underline ${String(p.external_source ?? "").includes("SismoVenezuela") ? "text-cyan-500 hover:text-cyan-300" : "text-violet-500 hover:text-violet-300"}`}>
-                              Ver reporte original ↗
-                            </a>
-                          )}
-                          {p.lat && p.lng && (
-                            <button onClick={() => { map.current?.flyTo({ center: [p.lng!, p.lat!], zoom: 14, duration: 1000 }); setPanelTab(null); }}
-                              className="text-xs text-gray-500 hover:text-gray-300 text-left">ver en mapa →</button>
-                          )}
-                        </div>
-                      </div>
+
+                {/* Localizados upsell */}
+                <div className="mt-auto pt-3 border-t border-gray-800">
+                  <p className="text-gray-500 text-xs mb-2">¿Buscas a alguien confirmado en un hospital?</p>
+                  <a href="/localizados" className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-cyan-950/40 border border-cyan-800/40 hover:border-cyan-600 transition-colors">
+                    <span className="text-cyan-400 text-sm shrink-0">🔍</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-xs font-semibold">Cruces de datos SismoVenezuela</p>
+                      <p className="text-cyan-500 text-[10px]">Listas de hospitales verificadas por nuestro algoritmo</p>
                     </div>
-                  ))}
-                  {!missingPanelLoading && missingPanelList.length === 0 && (
-                    <p className="text-gray-500 text-sm p-4 text-center">No se encontraron resultados.</p>
-                  )}
-                  {missingPanelList.length > 0 && missingPanelList.length < missingPanelTotal && (
-                    <div className="p-3 flex justify-center">
-                      <button onClick={loadMoreMissing} disabled={missingPanelLoading}
-                        className="px-4 py-2 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium disabled:opacity-50">
-                        {missingPanelLoading ? "Cargando..." : `Cargar más (${missingPanelTotal - missingPanelList.length} restantes)`}
-                      </button>
-                    </div>
-                  )}
-                  <div className="p-3 border-t border-gray-800">
-                    <p className="text-gray-600 text-xs text-center">
-                      <a href="https://desaparecidosterremotovenezuela.com" className="text-violet-500 hover:text-violet-300" target="_blank" rel="noopener noreferrer">desaparecidosterremotovenezuela.com</a>
-                      {" · "}
-                      <a href="https://venezuelatebusca.com" className="text-violet-500 hover:text-violet-300" target="_blank" rel="noopener noreferrer">venezuelatebusca.com</a>
-                    </p>
-                  </div>
+                    <span className="text-cyan-400 text-xs shrink-0">↗</span>
+                  </a>
                 </div>
               </div>
             )}
@@ -1532,91 +1475,73 @@ export default function Home() {
 
             {/* Personas tab – mobile */}
             {panelTab === "personas" && (
-              <>
+              <div className="flex flex-col overflow-y-auto p-3 gap-3">
                 {selectedExternalPerson && (() => {
-                  const ep = selectedExternalPerson as { nombre?: string; edad?: number; estado?: string; foto?: string; ubicacion?: string; };
+                  const ep = selectedExternalPerson as { nombre?: string; edad?: number; estado?: string; source_id?: string; };
+                  const searchUrl = ep.source_id
+                    ? `https://desaparecidosterremotovenezuela.com/?persona=${ep.source_id}`
+                    : ep.nombre
+                    ? `https://desaparecidosterremotovenezuela.com/?q=${encodeURIComponent(ep.nombre)}`
+                    : "https://desaparecidosterremotovenezuela.com";
                   return (
-                    <div className="px-3 py-2.5 border-b border-violet-800/40 bg-violet-950/20 shrink-0 flex gap-3 items-start">
-                      {ep.foto
-                        // eslint-disable-next-line @next/next/no-img-element
-                        ? <img src={ep.foto} alt={ep.nombre ?? ""} className="w-12 h-12 rounded-lg object-cover shrink-0" />
-                        : null}
+                    <div className="bg-violet-950/30 border border-violet-800/40 rounded-lg px-3 py-2.5 flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <span className={`text-xs px-1.5 py-0.5 rounded ${ep.estado === "localizado" ? "bg-green-800 text-green-300" : "bg-violet-900 text-violet-300"}`}>
                           {ep.estado === "localizado" ? "✓ Localizado" : "Sin contacto"}
                         </span>
-                        <p className="font-bold text-white text-sm mt-1 truncate">{ep.nombre}</p>
-                        {ep.ubicacion ? <p className="text-gray-400 text-xs truncate">📍 {ep.ubicacion}</p> : null}
+                        {ep.nombre && <p className="font-bold text-white text-sm mt-1">{ep.nombre}</p>}
+                        <a href={searchUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-violet-400 mt-1 inline-block">
+                          desaparecidosterremotovenezuela.com →
+                        </a>
                       </div>
                       <button onClick={() => setSelectedExternalPerson(null)} className="text-gray-500 text-lg leading-none shrink-0">×</button>
                     </div>
                   );
                 })()}
-                <div className="px-3 py-2 shrink-0 flex flex-col gap-2 border-b border-gray-800">
-                  <div className="flex items-center justify-between">
-                    <p className="text-gray-400 text-xs"><span className="text-white">{missingPanelList.length}</span> de {missingPanelTotal.toLocaleString()}</p>
-                    <button onClick={() => { setShowMissing(true); setMissingStatus("idle"); }} className="px-2 py-0.5 rounded text-xs bg-orange-800 text-white">+ Reportar</button>
+                {externalMissingTotal != null && (
+                  <div>
+                    <p className="text-xl font-bold text-white">{externalMissingTotal.toLocaleString()}</p>
+                    <p className="text-gray-400 text-xs">personas sin contacto reportadas</p>
                   </div>
-                  <input value={missingSearch} onChange={e => setMissingSearch(e.target.value)} placeholder="Buscar por nombre..."
-                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none" />
-                  <div className="flex gap-1">
-                    {([["", "Todos"], ["sin-contacto", "Sin contacto"], ["encontrado", "Encontrados"]] as const).map(([val, label]) => (
-                      <button key={val} onClick={() => setMissingStatusFilter(val)}
-                        className={`px-2 py-0.5 rounded text-xs ${missingStatusFilter === val ? "bg-violet-700 text-white" : "bg-gray-800 text-gray-400"}`}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="overflow-y-auto flex flex-col divide-y divide-gray-800">
-                  {missingPanelList.map((p) => (
-                    <div key={`m-${p.id}`} className="px-3 py-2.5 flex gap-2.5">
-                      {p.photo_url
-                        // eslint-disable-next-line @next/next/no-img-element
-                        ? <img src={p.photo_url} alt={p.name} className="w-10 h-10 rounded object-cover shrink-0 border border-gray-700" />
-                        : <div className="w-10 h-10 rounded bg-gray-800 shrink-0 flex items-center justify-center text-gray-600">👤</div>}
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <p className="font-semibold text-white text-sm truncate">{p.name}</p>
-                          {p.age ? <span className="text-gray-500 text-xs">{p.age}a</span> : null}
-                        </div>
-                        {p.last_seen_location ? <p className="text-gray-400 text-xs truncate">📍 {p.last_seen_location}</p> : null}
-                        <span className={`text-xs px-1 py-0.5 rounded w-fit ${(p.status === "encontrado" || p.status === "localizado") ? "bg-green-900 text-green-300" : "bg-orange-900/50 text-orange-400"}`}>
-                          {(p.status === "encontrado" || p.status === "localizado") ? "✓ Localizado" : "Sin contacto"}
-                        </span>
-                        {String(p.external_source ?? "").includes("SismoVenezuela") && (
-                          <p className="text-[10px] text-cyan-400">🔍 Cruce SismoVenezuela</p>
-                        )}
-                        {p.external_source && !String(p.external_source).includes("SismoVenezuela") && (() => {
-                          const isDesap = String(p.external_source).includes("desaparecidos");
-                          const personUrl = isDesap && p.source_id
-                            ? `https://desaparecidosterremotovenezuela.com/?persona=${p.source_id}`
-                            : isDesap ? "https://desaparecidosterremotovenezuela.com" : "https://venezulatebusca.com";
-                          return (
-                            <a href={personUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-violet-400 hover:text-violet-200">
-                              {isDesap ? (p.source_id ? "Ver ficha ↗" : "desaparecidos.com ↗") : "venezulatebusca.com ↗"}
-                            </a>
-                          );
-                        })()}
-                        {p.source2_url && (
-                          <a href={String(p.source2_url)} target="_blank" rel="noopener noreferrer"
-                            className="text-[10px] text-blue-400 hover:text-blue-200">Ver reporte original ↗</a>
-                        )}
-                      </div>
+                )}
+                <div className="flex flex-col gap-2">
+                  <a href="https://desaparecidosterremotovenezuela.com" target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-violet-950/50 border border-violet-800/50 hover:border-violet-500 transition-colors">
+                    <div>
+                      <p className="text-white text-xs font-semibold">desaparecidosterremotovenezuela.com</p>
+                      <p className="text-violet-400 text-[10px]">Búsqueda por nombre</p>
                     </div>
-                  ))}
-                  {missingPanelList.length > 0 && missingPanelList.length < missingPanelTotal && (
-                    <div className="p-3 flex justify-center shrink-0">
-                      <button onClick={loadMoreMissing} disabled={missingPanelLoading}
-                        className="px-4 py-2 rounded bg-gray-800 text-gray-300 text-xs disabled:opacity-50">
-                        {missingPanelLoading ? "Cargando..." : `Cargar más (${missingPanelTotal - missingPanelList.length} restantes)`}
-                      </button>
+                    <span className="text-violet-400 text-sm shrink-0">↗</span>
+                  </a>
+                  <a href="https://venezulatebusca.com" target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-violet-950/50 border border-violet-800/50 hover:border-violet-500 transition-colors">
+                    <div>
+                      <p className="text-white text-xs font-semibold">venezulatebusca.com</p>
+                      <p className="text-violet-400 text-[10px]">Búsqueda por nombre o cédula</p>
                     </div>
-                  )}
+                    <span className="text-violet-400 text-sm shrink-0">↗</span>
+                  </a>
+                  <a href="https://terremotovenezuela.app" target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-violet-950/50 border border-violet-800/50 hover:border-violet-500 transition-colors">
+                    <div>
+                      <p className="text-white text-xs font-semibold">terremotovenezuela.app</p>
+                      <p className="text-violet-400 text-[10px]">Plataforma integral</p>
+                    </div>
+                    <span className="text-violet-400 text-sm shrink-0">↗</span>
+                  </a>
                 </div>
-              </>
+                <div className="pt-3 border-t border-gray-800">
+                  <a href="/localizados" className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-cyan-950/40 border border-cyan-800/40 hover:border-cyan-600 transition-colors">
+                    <span className="text-cyan-400 text-xs shrink-0">🔍</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-xs font-semibold">Cruces de datos SismoVenezuela</p>
+                      <p className="text-cyan-500 text-[10px]">Listas de hospitales verificadas</p>
+                    </div>
+                    <span className="text-cyan-400 text-xs shrink-0">↗</span>
+                  </a>
+                </div>
+              </div>
             )}
-
             {/* Edificios tab – mobile */}
             {panelTab === "edificios" && (
               <>

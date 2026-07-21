@@ -11,6 +11,10 @@ CONDA="conda run -n agent python"
 echo "" >> "$LOG"
 echo "=== $(date -u '+%Y-%m-%d %H:%M:%S UTC') ===" >> "$LOG"
 
+# Capture minute at start — used for all time-gated blocks below.
+# Re-evaluating date +%M after long-running jobs (e.g. transcription) gives wrong minute.
+START_MINUTE=$(date +%M)
+
 cd "$REPO"
 
 echo "[youtube]" >> "$LOG"
@@ -23,7 +27,7 @@ echo "[instagram]" >> "$LOG"
 $CONDA scrapers/instagram_search.py >> "$LOG" 2>&1 || echo "[instagram] FAILED (exit $?)" >> "$LOG"
 
 # Transcription + casualties run every 3rd cycle (~30 min)
-MINUTE=$(date +%M)
+MINUTE=$START_MINUTE
 if [ "$MINUTE" -lt 10 ] || { [ "$MINUTE" -gt 40 ] && [ "$MINUTE" -lt 50 ]; }; then
     echo "[transcribe]" >> "$LOG"
     $CONDA scrapers/transcribe_youtube.py >> "$LOG" 2>&1 || echo "[transcribe] FAILED (exit $?)" >> "$LOG"
@@ -60,8 +64,7 @@ if [ "$MINUTE" -lt 10 ] || { [ "$MINUTE" -gt 40 ] && [ "$MINUTE" -lt 50 ]; }; th
 fi
 
 # Gemma jobs run once per hour (minutes 0–9 only, i.e. first cycle of each hour)
-HOUR_MINUTE=$(date +%M)
-if [ "$HOUR_MINUTE" -lt 10 ]; then
+if [ "$START_MINUTE" -lt 10 ]; then
     # Dedup — incremental, fast after first pass
     echo "[dedup-gemma]" >> "$LOG"
     $CONDA scrapers/dedup_gemma.py >> "$LOG" 2>&1 || echo "[dedup-gemma] FAILED (exit $?)" >> "$LOG"
